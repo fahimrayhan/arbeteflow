@@ -1,0 +1,91 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+@theme inline {
+  --font-display: 'Instrument Sans', sans-serif;
+  --font-body:    'Inter', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  /* ── Dark mode defaults ─────────────────────────────────────────── */
+  --color-background:           #0D0D0D;
+  --color-foreground:           #F4F4F2;
+  --color-card:                 #161616;
+  --color-card-foreground:      #F4F4F2;
+
+  --color-primary:              #A3E635;
+  --color-primary-foreground:   #111800;
+
+  --color-secondary:            #222222;
+  --color-secondary-foreground: #A0A0A0;
+
+  --color-muted:                #111111;
+  --color-muted-foreground:     #6B6B6B;
+
+  --color-accent:               #4ADE80;
+  --color-accent-foreground:    #052010;
+
+  --color-border:               #272727;
+  --color-ring:                 #A3E635;
+  --color-destructive:          #EF4444;
+
+  /* Sidebar */
+  --color-sidebar:              #141414;
+  --color-sidebar-border:       #272727;
+
+  /* Primary glow */
+  --shadow-primary-glow:        0 0 18px rgba(163,230,53,0.3);
+  --shadow-btn-glow:            0 2px 12px rgba(163,230,53,0.25);
+}
+
+/* ── Light mode overrides ─────────────────────────────────────────── */
+[data-theme="light"] {
+  --color-background:           #F7F8F4;
+  --color-foreground:           #171717;
+  --color-card:                 #FFFFFF;
+  --color-card-foreground:      #171717;
+
+  --color-primary:              #65A30D;
+  --color-primary-foreground:   #FFFFFF;
+
+  --color-secondary:            #F0F1EB;
+  --color-secondary-foreground: #525252;
+
+  --color-muted:                #EBEBE6;
+  --color-muted-foreground:     #737373;
+
+  --color-accent:               #16A34A;
+  --color-accent-foreground:    #FFFFFF;
+
+  --color-border:               #E1E2DC;
+  --color-ring:                 #65A30D;
+  --color-destructive:          #DC2626;
+
+  --color-sidebar:              #FFFFFF;
+  --color-sidebar-border:       #E1E2DC;
+
+  --shadow-primary-glow:        0 0 18px rgba(101,163,13,0.2);
+  --shadow-btn-glow:            0 2px 12px rgba(101,163,13,0.2);
+}
+
+/* ── Base ─────────────────────────────────────────────────────────── */
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s ease, color 0.2s ease;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+* { scrollbar-width: thin; scrollbar-color: var(--color-border) transparent; }
+::-webkit-scrollbar          { width: 4px; height: 4px; }
+::-webkit-scrollbar-track    { background: transparent; }
+::-webkit-scrollbar-thumb    { background: var(--color-border); border-radius: 2px; }
+
+::selection { background: rgba(163, 230, 53, 0.22); }
