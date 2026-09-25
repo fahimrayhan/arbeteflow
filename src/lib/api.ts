@@ -1,278 +1,449 @@
-import type { AppSettings, JobApplication } from './types';
+import type {
+  InterviewDifficulty,
+  InterviewType,
+  JobApplication,
+  JobStatus,
+  Message,
+} from "./types";
 
-export interface StreamCallbacks {
-  onToken: (token: string) => void;
-  onDone: () => void;
-  onError: (err: string) => void;
-}
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8787";
 
-type ApiMessage = { role: 'user' | 'assistant'; content: string };
+const DEVELOPMENT_USER_ID =
+  import.meta.env.VITE_DEVELOPMENT_USER_ID ?? "manolis-local-dev";
 
-/* ─── Main router ─────────────────────────────────────────────────────────── */
+type ApiMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+};
 
-export async function callModel(
-  settings: AppSettings,
-  messages: ApiMessage[],
-  systemPrompt: string,
-  callbacks: StreamCallbacks,
-): Promise<void> {
-  const { activeProvider, activeModel, providers } = settings;
+export type ApiResume = {
+  id: string;
+  title: string;
+  rawText: string;
+  enhancedText?: string;
+  isPrimary: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
 
-  switch (activeProvider) {
-    case 'anthropic':
-      return callAnthropic(providers.anthropic.apiKey, activeModel, messages, systemPrompt, callbacks);
-    case 'openai':
-      return callOpenAI(providers.openai.apiKey, activeModel, messages, systemPrompt, callbacks);
-    case 'gemini':
-      return callGemini(providers.gemini.apiKey, activeModel, messages, systemPrompt, callbacks);
-    case 'ollama':
-      return callOllama(
-        providers.ollama.baseUrl || 'http://localhost:11434',
-        activeModel === 'custom' ? providers.ollama.customModel : activeModel,
-        messages,
-        systemPrompt,
-        callbacks,
-      );
-  }
-}
-
-/* ─── Anthropic / Claude ─────────────────────────────────────────────────── */
-
-async function callAnthropic(
-  apiKey: string,
-  model: string,
-  messages: ApiMessage[],
-  system: string,
-  cb: StreamCallbacks,
-): Promise<void> {
-  if (!apiKey) return cb.onError('No Anthropic API key. Add it in Settings.');
-
-  let res: Response;
-  try {
-    res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({ model, max_tokens: 4096, system, stream: true, messages }),
-    });
-  } catch (e) {
-    return cb.onError(`Network error: ${e instanceof Error ? e.message : String(e)}`);
-  }
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: { message: `HTTP ${res.status}` } }));
-    return cb.onError(err?.error?.message ?? `Anthropic error ${res.status}`);
-  }
-
-  await readSSE(res, (data) => {
-    if (data.type === 'content_block_delta' && data.delta?.type === 'text_delta') {
-      cb.onToken(data.delta.text);
-    }
-  });
-  cb.onDone();
-}
-
-/* ─── OpenAI / ChatGPT ───────────────────────────────────────────────────── */
-
-async function callOpenAI(
-  apiKey: string,
-  model: string,
-  messages: ApiMessage[],
-  system: string,
-  cb: StreamCallbacks,
-  baseUrl = 'https://api.openai.com',
-): Promise<void> {
-  if (!apiKey) return cb.onError('No OpenAI API key. Add it in Settings.');
-
-  const payload = {
-    model,
-    stream: true,
-    max_tokens: 4096,
-    messages: [{ role: 'system', content: system }, ...messages],
+export type ApiInterview = {
+  id: string;
+  role: string;
+  company: string;
+  jobDescription: string;
+  interviewType: InterviewType;
+  difficulty: InterviewDifficulty;
+  resumeId?: string;
+  status: "active" | "completed";
+  messages: ApiMessage[];
+  feedback?: {
+    overallScore: number;
+    strengths: string[];
+    improvements: string[];
+    suggestedAnswers: string[];
+    preparationPlan: string[];
   };
+  createdAt: string;
+  updatedAt: string;
+};
 
-  let res: Response;
-  try {
-    res = await fetch(`${baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch (e) {
-    return cb.onError(`Network error: ${e instanceof Error ? e.message : String(e)}`);
-  }
+type SseDoneData = {
+  messageId?: string;
+  completed?: boolean;
+};
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: { message: `HTTP ${res.status}` } }));
-    return cb.onError(err?.error?.message ?? `OpenAI error ${res.status}`);
-  }
-
-  await readSSE(res, (data) => {
-    const token = data.choices?.[0]?.delta?.content;
-    if (token) cb.onToken(token);
-  });
-  cb.onDone();
-}
-
-/* ─── Google Gemini ──────────────────────────────────────────────────────── */
-
-async function callGemini(
-  apiKey: string,
-  model: string,
-  messages: ApiMessage[],
-  system: string,
-  cb: StreamCallbacks,
-): Promise<void> {
-  if (!apiKey) return cb.onError('No Gemini API key. Add it in Settings.');
-
-  // Gemini uses "model" role instead of "assistant"
-  const contents = messages.map((m) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }],
-  }));
-
-  const payload = {
-    system_instruction: { parts: [{ text: system }] },
-    contents,
-    generationConfig: { maxOutputTokens: 4096 },
+function headers(): HeadersInit {
+  return {
+    "Content-Type": "application/json",
+    "x-user-id": DEVELOPMENT_USER_ID,
   };
+}
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`;
+async function readApiError(response: Response): Promise<string> {
+  const body = await response.json().catch(() => null);
 
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-  } catch (e) {
-    return cb.onError(`Network error: ${e instanceof Error ? e.message : String(e)}`);
-  }
+  return body?.error ?? `Request failed with HTTP ${response.status}.`;
+}
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: { message: `HTTP ${res.status}` } }));
-    return cb.onError(err?.error?.message ?? `Gemini error ${res.status}`);
-  }
-
-  await readSSE(res, (data) => {
-    const token = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (token) cb.onToken(token);
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      ...headers(),
+      ...(init.headers ?? {}),
+    },
   });
-  cb.onDone();
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+
+  return response.json() as Promise<T>;
 }
 
-/* ─── Ollama (OpenAI-compatible) ─────────────────────────────────────────── */
+function jobFromApi(job: Record<string, unknown>): JobApplication {
+  return {
+    id: String(job.id),
+    company: String(job.company ?? ""),
+    role: String(job.role ?? ""),
+    location: String(job.location ?? ""),
+    status: job.status as JobStatus,
+    salary: String(job.salary ?? ""),
+    appliedDate: String(job.appliedDate ?? ""),
+    deadline: String(job.deadline ?? ""),
+    notes: String(job.notes ?? ""),
+    url: String(job.url ?? ""),
+    jobDescription: String(job.jobDescription ?? ""),
+  };
+}
 
-async function callOllama(
-  baseUrl: string,
-  model: string,
-  messages: ApiMessage[],
-  system: string,
-  cb: StreamCallbacks,
+export async function getPrimaryResume(): Promise<ApiResume | null> {
+  const response = await request<{ resume: ApiResume | null }>(
+    "/api/resume/primary",
+  );
+
+  return response.resume;
+}
+
+export async function savePrimaryResume(input: {
+  title?: string;
+  rawText: string;
+  enhancedText?: string;
+}): Promise<ApiResume> {
+  const response = await request<{ resume: ApiResume }>(
+    "/api/resume/primary",
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+  );
+
+  return response.resume;
+}
+
+export async function streamResumeEnhancement(
+  input: {
+    resumeText: string;
+    targetRole?: string;
+    industry?: string;
+  },
+  onToken: (token: string) => void,
 ): Promise<void> {
-  if (!model) return cb.onError('No Ollama model set. Configure it in Settings.');
-
-  // Ollama's OpenAI-compatible endpoint
-  return callOpenAI('ollama', model, messages, system, cb, baseUrl.replace(/\/$/, ''));
+  await streamSseResponse(
+    "/api/resume/enhance",
+    input,
+    onToken,
+  );
 }
 
-/* ─── SSE streaming helper ───────────────────────────────────────────────── */
+export async function streamCoverLetterGeneration(
+  input: {
+    company: string;
+    role: string;
+    jobDescription?: string;
+    resumeText?: string;
+    tone: "professional" | "confident" | "warm";
+  },
+  onToken: (token: string) => void,
+): Promise<void> {
+  await streamSseResponse(
+    "/api/cover-letter/generate",
+    input,
+    onToken,
+  );
+}
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function readSSE(res: Response, onEvent: (data: any) => void): Promise<void> {
-  const reader = res.body!.getReader();
+export type ModelProvider =
+  | 'vllm'
+  | 'ollama'
+  | 'openai'
+  | 'anthropic';
+
+export type PublicModelConfig = {
+  provider: ModelProvider;
+  baseUrl: string;
+  model: string;
+  hasApiKey: boolean;
+  updatedAt: string;
+};
+
+export async function getModelSettings(): Promise<PublicModelConfig> {
+  const response = await request<{
+    config: PublicModelConfig;
+  }>('/api/settings/model');
+
+  return response.config;
+}
+
+export async function saveModelSettings(input: {
+  provider: ModelProvider;
+  baseUrl: string;
+  model: string;
+  apiKey?: string;
+}): Promise<PublicModelConfig> {
+  const response = await request<{
+    config: PublicModelConfig;
+  }>('/api/settings/model', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+
+  return response.config;
+}
+
+export async function getJobs(): Promise<JobApplication[]> {
+  const response = await request<{ jobs: Record<string, unknown>[] }>(
+    "/api/jobs",
+  );
+
+  return response.jobs.map(jobFromApi);
+}
+
+export async function createJob(
+  input: Omit<JobApplication, "id">,
+): Promise<JobApplication> {
+  const response = await request<{ job: Record<string, unknown> }>(
+    "/api/jobs",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+
+  return jobFromApi(response.job);
+}
+
+export async function updateJob(
+  jobId: string,
+  input: Partial<Omit<JobApplication, "id">>,
+): Promise<JobApplication> {
+  const response = await request<{ job: Record<string, unknown> }>(
+    `/api/jobs/${jobId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    },
+  );
+
+  return jobFromApi(response.job);
+}
+
+export async function deleteJob(jobId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+}
+
+export async function createCoachSession(
+  mode: "resume" | "career" | "jobcritic",
+): Promise<{
+  id: string;
+  mode: string;
+  messages: ApiMessage[];
+}> {
+  const response = await request<{
+    session: {
+      id: string;
+      mode: string;
+      messages: ApiMessage[];
+    };
+  }>("/api/chat/sessions", {
+    method: "POST",
+    body: JSON.stringify({ mode }),
+  });
+
+  return response.session;
+}
+
+export async function getCoachSession(sessionId: string): Promise<{
+  id: string;
+  mode: string;
+  messages: ApiMessage[];
+}> {
+  const response = await request<{
+    session: {
+      id: string;
+      mode: string;
+      messages: ApiMessage[];
+    };
+  }>(`/api/chat/sessions/${sessionId}`);
+
+  return response.session;
+}
+
+export async function streamCoachMessage(
+  sessionId: string,
+  content: string,
+  onToken: (token: string) => void,
+): Promise<SseDoneData> {
+  return streamSseResponse(
+    `/api/chat/sessions/${sessionId}/messages`,
+    { content },
+    onToken,
+  );
+}
+
+export async function createInterview(input: {
+  role: string;
+  company?: string;
+  jobDescription?: string;
+  interviewType: InterviewType;
+  difficulty: InterviewDifficulty;
+  resumeId?: string;
+}): Promise<ApiInterview> {
+  const response = await request<{ interview: ApiInterview }>(
+    "/api/interviews",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+
+  return response.interview;
+}
+
+export async function getInterview(
+  interviewId: string,
+): Promise<ApiInterview> {
+  const response = await request<{ interview: ApiInterview }>(
+    `/api/interviews/${interviewId}`,
+  );
+
+  return response.interview;
+}
+
+export async function streamInterviewMessage(
+  interviewId: string,
+  content: string,
+  onToken: (token: string) => void,
+): Promise<SseDoneData> {
+  return streamSseResponse(
+    `/api/interviews/${interviewId}/messages`,
+    { content },
+    onToken,
+  );
+}
+
+async function streamSseResponse(
+  path: string,
+  body: Record<string, unknown>,
+  onToken: (token: string) => void,
+): Promise<SseDoneData> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+
+  if (!response.body) {
+    throw new Error("The server returned an empty streaming response.");
+  }
+
+  const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = '';
+  let buffer = "";
+  let doneData: SseDoneData = {};
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
 
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
+      if (done) {
+        break;
+      }
 
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const raw = line.slice(6).trim();
-      if (!raw || raw === '[DONE]') continue;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onEvent(JSON.parse(raw) as any);
-      } catch {
-        // malformed chunk — skip
+      buffer += decoder.decode(value, { stream: true });
+
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+
+      for (const event of events) {
+        processSseEvent(event, onToken, (data) => {
+          doneData = data;
+        });
       }
     }
+
+    if (buffer.trim()) {
+      processSseEvent(buffer, onToken, (data) => {
+        doneData = data;
+      });
+    }
+
+    return doneData;
+  } finally {
+    reader.releaseLock();
   }
 }
 
-/* ─── Prompt builders ────────────────────────────────────────────────────── */
+function processSseEvent(
+  event: string,
+  onToken: (token: string) => void,
+  onDone: (data: SseDoneData) => void,
+): void {
+  const eventName =
+    event
+      .split("\n")
+      .find((line) => line.startsWith("event:"))
+      ?.slice(6)
+      .trim() ?? "";
 
-export function buildJobMemory(jobs: JobApplication[]): string {
-  if (!jobs.length) return '';
-  const lines = jobs.map(
-    (j) =>
-      `• ${j.company} | ${j.role}${j.location ? ` | ${j.location}` : ''}${j.salary ? ` | ${j.salary}` : ''} | Status: ${j.status.toUpperCase()}${j.appliedDate ? ` | Applied: ${j.appliedDate}` : ''}${j.notes ? `\n  Notes: ${j.notes}` : ''}`,
-  );
-  return `\n\n---\nUSER'S CURRENT JOB APPLICATIONS (Job Tracker memory — use this context when relevant):\n${lines.join('\n')}\n---`;
+  const rawData =
+    event
+      .split("\n")
+      .find((line) => line.startsWith("data:"))
+      ?.slice(5)
+      .trim() ?? "";
+
+  if (!rawData) {
+    return;
+  }
+
+  const data = JSON.parse(rawData) as {
+    token?: string;
+    error?: string;
+    messageId?: string;
+    completed?: boolean;
+  };
+
+  if (eventName === "error") {
+    throw new Error(data.error ?? "Streaming request failed.");
+  }
+
+  if (eventName === "token" && data.token) {
+    onToken(data.token);
+  }
+
+  if (eventName === "done") {
+    onDone({
+      messageId: data.messageId,
+      completed: data.completed,
+    });
+  }
 }
 
-export const RESUME_SYSTEM = `You are an expert resume/CV coach and professional writer. Your job is to enhance resumes to be more impactful, ATS-friendly, and compelling to hiring managers.
-
-When enhancing a resume:
-- Use strong action verbs and quantify achievements where possible
-- Improve clarity and conciseness
-- Optimize for ATS (Applicant Tracking Systems)
-- Tailor language to the target role/industry if provided
-- Maintain the same structure but elevate the language
-- Add relevant industry keywords naturally
-- Fix any grammatical issues
-
-Return the enhanced resume in a clean, well-formatted text format.`;
-
-export const CHAT_SYSTEMS: Record<string, string> = {
-  resume: `You are a world-class resume and CV coach with expertise in hiring across tech, finance, healthcare, and other industries. You provide specific, actionable feedback on resumes and CVs.
-
-Your approach:
-- Give honest, direct feedback — don't be vague
-- Point out specific weaknesses and how to fix them
-- Identify missing keywords and sections
-- Suggest quantifiable improvements
-- Explain WHY changes matter (ATS, recruiter psychology, etc.)
-- Be encouraging but realistic
-
-When reviewing documents, be thorough and specific. Ask clarifying questions when needed.`,
-
-  career: `You are a seasoned career advisor and coach who has helped thousands of professionals navigate their careers. You provide practical, honest career guidance.
-
-Your expertise includes:
-- Career transitions and pivoting industries
-- Skill gap analysis and development plans
-- Salary negotiation strategies
-- Building professional networks
-- Interview preparation and coaching
-- Understanding job market trends
-- Personal branding and LinkedIn optimization
-
-Give concrete advice with specific action steps. Be direct and honest.`,
-
-  jobcritic: `You are a sharp job market analyst and critic. Your job is to give honest, unfiltered analysis of job postings, company culture, and career moves.
-
-When analyzing jobs:
-- Identify red flags in job descriptions (vague language, unrealistic expectations, poor culture signals)
-- Evaluate compensation fairness based on role and market
-- Spot signs of toxic work environments from job postings
-- Assess if a role matches what's described vs. what's likely
-- Give your honest opinion on whether to pursue a role
-- Highlight what questions to ask in interviews to verify claims
-
-Be direct, even blunt. Professionals deserve honest assessments.`,
-};
+export function apiMessagesToUiMessages(
+  messages: ApiMessage[],
+): Message[] {
+  return messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    timestamp: new Date(message.createdAt),
+  }));
+}

@@ -1,6 +1,51 @@
-export type View = 'resume' | 'coverletter' | 'chat' | 'tracker' | 'settings';
+// export type View = 'resume' | 'coverletter' | 'chat' | 'tracker' | 'settings';
 
-export type ChatMode = 'resume' | 'career' | 'jobcritic';
+// export type ChatMode = 'resume' | 'career' | 'jobcritic';
+
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+}
+
+export interface JobApplication {
+  id: string;
+  company: string;
+  role: string;
+  location: string;
+  status: JobStatus;
+  salary?: string;
+  appliedDate: string;
+  deadline?: string;
+  notes: string;
+  url?: string;
+  jobDescription?: string;
+}
+
+export type View =
+  | 'resume'
+  | 'coverletter'
+  | 'chat'
+  | 'interview'
+  | 'tracker'
+  | 'settings';
+
+export type ChatMode =
+  | 'resume'
+  | 'career'
+  | 'jobcritic';
+
+export type InterviewType =
+  | 'behavioral'
+  | 'technical'
+  | 'mixed'
+  | 'case';
+
+export type InterviewDifficulty =
+  | 'junior'
+  | 'mid'
+  | 'senior';
 
 export interface Message {
   id: string;
@@ -31,7 +76,7 @@ export interface JobApplication {
   jobDescription?: string;
 }
 
-/* ─── Multi-provider AI ─────────────────────────────────────────────────── */
+/* â”€â”€â”€ Multi-provider AI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 export type Provider = 'anthropic' | 'openai' | 'gemini' | 'ollama';
 
@@ -75,7 +120,7 @@ export const PROVIDER_MODELS: Record<Provider, ModelOption[]> = {
     { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro',          desc: 'Advanced preview model for complex problems',  badge: 'Preview' },
   ],
   ollama: [
-    { id: 'qwen3.8',   name: 'Qwen 3.8',   desc: 'Latest general-purpose open model',       badge: 'Recommended' },
+    { id: 'Qwen/Qwen2-VL-2B-Instruct',   name: 'Qwen/Qwen2-VL-2B-Instruct',   desc: 'Latest general-purpose open model',       badge: 'Recommended' },
     { id: 'qwen3.5',   name: 'Qwen 3.5',   desc: 'Multimodal model with strong tool use',  badge: '' },
     { id: 'gemma4',    name: 'Gemma 4',    desc: 'Frontier-level local reasoning and coding', badge: '' },
     { id: 'gpt-oss',   name: 'GPT-OSS',    desc: 'Open-weight reasoning and agentic model', badge: '' },
@@ -90,32 +135,32 @@ export const PROVIDER_META: Record<Provider, { label: string; color: string; bg:
     color: '#D97757',
     bg: 'rgba(217,119,87,0.1)',
     border: 'rgba(217,119,87,0.25)',
-    logo: '◆',
+    logo: 'â—†',
   },
   openai: {
     label: 'ChatGPT',
     color: '#10A37F',
     bg: 'rgba(16,163,127,0.1)',
     border: 'rgba(16,163,127,0.25)',
-    logo: '⬡',
+    logo: 'â¬¡',
   },
   gemini: {
     label: 'Gemini',
     color: '#4F8EF7',
     bg: 'rgba(79,142,247,0.1)',
     border: 'rgba(79,142,247,0.25)',
-    logo: '✦',
+    logo: 'âœ¦',
   },
   ollama: {
     label: 'Local',
     color: '#34D399',
     bg: 'rgba(52,211,153,0.1)',
     border: 'rgba(52,211,153,0.25)',
-    logo: '⬢',
+    logo: 'â¬¢',
   },
 };
 
-/* ─── Job status display ─────────────────────────────────────────────────── */
+/* â”€â”€â”€ Job status display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 export const JOB_STATUS_META: Record<
   JobStatus,
