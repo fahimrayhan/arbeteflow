@@ -21,6 +21,8 @@ export const config = {
     process.env.MODEL_BASE_URL ?? "http://127.0.0.1:8000"
   ).replace(/\/+$/, ""),
 
+  jobsServiceUrl: (process.env.JOBS_SERVICE_URL ?? "http://jobs-service:8000").replace(/\/+$/, ""),
+
   modelApiKey: process.env.MODEL_API_KEY ?? "local-dev-secret",
   modelName: required("MODEL_NAME"),
 

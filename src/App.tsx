@@ -8,6 +8,7 @@ import {
 import {
   BriefcaseBusiness,
   ChevronRight,
+  Search,
   FileText,
   Kanban,
   Mail,
@@ -25,6 +26,7 @@ import CoverLetter from './views/CoverLetter';
 import Chat from './views/Chat';
 import Interview from './views/Interview';
 import Tracker from './views/Tracker';
+import JobFinder from './views/JobFinder';
 import SettingsView from './views/Settings';
 
 type Theme = 'dark' | 'light';
@@ -80,6 +82,12 @@ const NAV_ITEMS: NavigationItem[] = [
     label: 'Interview Practice',
     icon: BriefcaseBusiness,
     description: 'Practice with an AI interviewer',
+  },
+  {
+    id: 'finder',
+    label: 'Job Finder',
+    icon: Search,
+    description: 'Search and match Swedish listings',
   },
   {
     id: 'tracker',
@@ -196,14 +204,14 @@ export default function App() {
                   className="font-bold tracking-tight"
                   style={{ color: 'var(--color-foreground)' }}
                 >
-                  CareerAI
+                  ArbeteFlow
                 </div>
 
                 <div
                   className="text-xs"
                   style={{ color: 'var(--color-muted-foreground)' }}
                 >
-                  Local career workspace
+                  Local career accelerator
                 </div>
               </div>
             </div>
@@ -290,7 +298,7 @@ export default function App() {
                     className="text-xs font-semibold"
                     style={{ color: 'var(--color-foreground)' }}
                   >
-                    Local backend
+                  MongoDB backend
                   </span>
                 </div>
 
@@ -298,7 +306,7 @@ export default function App() {
                   className="text-xs leading-5 mt-1"
                   style={{ color: 'var(--color-muted-foreground)' }}
                 >
-                  Resume data and AI requests are handled by your local server.
+                  Resume, applications, and AI requests are handled by the API service.
                 </p>
               </div>
 
@@ -351,14 +359,14 @@ export default function App() {
                 className="font-semibold truncate"
                 style={{ color: 'var(--color-foreground)' }}
               >
-                {activeNavigationItem?.label ?? 'CareerAI'}
+                {activeNavigationItem?.label ?? 'ArbeteFlow'}
               </div>
 
               <div
                 className="text-xs truncate"
                 style={{ color: 'var(--color-muted-foreground)' }}
               >
-                Local career workspace
+                Local career accelerator
               </div>
             </div>
 
@@ -389,6 +397,7 @@ export default function App() {
             {view === 'coverletter' && <CoverLetter />}
             {view === 'chat' && <Chat />}
             {view === 'interview' && <Interview />}
+            {view === 'finder' && <JobFinder />}
             {view === 'tracker' && <Tracker />}
             {view === 'settings' && <SettingsView />}
           </div>

@@ -115,7 +115,7 @@ jobsRouter.patch("/:jobId", requireAuth, async (req, res, next) => {
       .collection<JobDocument>("jobs")
       .findOneAndUpdate(
         {
-          _id: getJobId(req.params.jobId),
+          _id: getJobId(String(req.params.jobId)),
           userId: req.user!.id,
         },
         {
@@ -147,7 +147,7 @@ jobsRouter.delete("/:jobId", requireAuth, async (req, res, next) => {
     const db = await getDb();
 
     const result = await db.collection<JobDocument>("jobs").deleteOne({
-      _id: getJobId(req.params.jobId),
+      _id: getJobId(String(req.params.jobId)),
       userId: req.user!.id,
     });
 

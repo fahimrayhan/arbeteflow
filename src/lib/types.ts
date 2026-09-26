@@ -28,8 +28,23 @@ export type View =
   | 'coverletter'
   | 'chat'
   | 'interview'
+  | 'finder'
   | 'tracker'
   | 'settings';
+
+export interface JobMarketMatch {
+  similarity_distance: number;
+  similarity_score: number;
+  metadata: {
+    id?: string;
+    title?: string;
+    company?: string;
+    location?: string;
+    url?: string;
+    [key: string]: unknown;
+  };
+  document: string;
+}
 
 export type ChatMode =
   | 'resume'
@@ -77,90 +92,6 @@ export interface JobApplication {
 }
 
 /* â”€â”€â”€ Multi-provider AI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-
-export type Provider = 'anthropic' | 'openai' | 'gemini' | 'ollama';
-
-export interface ProviderConfigs {
-  anthropic: { apiKey: string };
-  openai: { apiKey: string };
-  gemini: { apiKey: string };
-  ollama: { baseUrl: string; customModel: string };
-}
-
-export interface AppSettings {
-  providers: ProviderConfigs;
-  activeProvider: Provider;
-  activeModel: string;
-}
-
-export interface ModelOption {
-  id: string;
-  name: string;
-  desc: string;
-  badge?: string;
-}
-
-export const PROVIDER_MODELS: Record<Provider, ModelOption[]> = {
-  anthropic: [
-    { id: 'claude-fable-5-1',           name: 'Claude Fable 5.1',  desc: 'Demanding reasoning and long-horizon work', badge: 'Most Powerful' },
-    { id: 'claude-opus-5',              name: 'Claude Opus 5',     desc: 'Complex agentic work and enterprise tasks', badge: 'Recommended' },
-    { id: 'claude-sonnet-5',            name: 'Claude Sonnet 5',   desc: 'Best balance of speed and intelligence',    badge: 'Balanced' },
-    { id: 'claude-haiku-4-5',           name: 'Claude Haiku 4.5',  desc: 'Fast, lightweight, great for chat',          badge: 'Fastest' },
-  ],
-  openai: [
-    { id: 'gpt-6-astra',    name: 'GPT-6 Astra',  desc: 'Most capable for complex reasoning and coding', badge: 'Most Powerful' },
-    { id: 'gpt-5.6-sol',    name: 'GPT-5.6 Sol',   desc: 'Flagship model for complex professional work', badge: 'Recommended' },
-    { id: 'gpt-5.6-terra',  name: 'GPT-5.6 Terra', desc: 'Strong intelligence at a lower cost',          badge: 'Balanced' },
-    { id: 'gpt-5.6-luna',   name: 'GPT-5.6 Luna',  desc: 'Fast and cost-efficient for high-volume tasks', badge: 'Fastest' },
-  ],
-  gemini: [
-    { id: 'gemini-3.8-flash',       name: 'Gemini 3.8 Flash',       desc: 'Latest stable model for complex agentic work', badge: 'Most Capable' },
-    { id: 'gemini-3.7-flash',       name: 'Gemini 3.7 Flash',       desc: 'Strong reasoning with fast responses',         badge: 'Recommended' },
-    { id: 'gemini-3.6-flash',       name: 'Gemini 3.6 Flash',       desc: 'Fast, capable multimodal model',               badge: 'Fast' },
-    { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro',          desc: 'Advanced preview model for complex problems',  badge: 'Preview' },
-  ],
-  ollama: [
-    { id: 'Qwen/Qwen2-VL-2B-Instruct',   name: 'Qwen/Qwen2-VL-2B-Instruct',   desc: 'Latest general-purpose open model',       badge: 'Recommended' },
-    { id: 'qwen3.5',   name: 'Qwen 3.5',   desc: 'Multimodal model with strong tool use',  badge: '' },
-    { id: 'gemma4',    name: 'Gemma 4',    desc: 'Frontier-level local reasoning and coding', badge: '' },
-    { id: 'gpt-oss',   name: 'GPT-OSS',    desc: 'Open-weight reasoning and agentic model', badge: '' },
-    { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', desc: 'Fast reasoning with a long context window', badge: '' },
-    { id: 'custom',    name: 'Custom model', desc: 'Enter any Ollama model name',             badge: '' },
-  ],
-};
-
-export const PROVIDER_META: Record<Provider, { label: string; color: string; bg: string; border: string; logo: string }> = {
-  anthropic: {
-    label: 'Claude',
-    color: '#D97757',
-    bg: 'rgba(217,119,87,0.1)',
-    border: 'rgba(217,119,87,0.25)',
-    logo: 'â—†',
-  },
-  openai: {
-    label: 'ChatGPT',
-    color: '#10A37F',
-    bg: 'rgba(16,163,127,0.1)',
-    border: 'rgba(16,163,127,0.25)',
-    logo: 'â¬¡',
-  },
-  gemini: {
-    label: 'Gemini',
-    color: '#4F8EF7',
-    bg: 'rgba(79,142,247,0.1)',
-    border: 'rgba(79,142,247,0.25)',
-    logo: 'âœ¦',
-  },
-  ollama: {
-    label: 'Local',
-    color: '#34D399',
-    bg: 'rgba(52,211,153,0.1)',
-    border: 'rgba(52,211,153,0.25)',
-    logo: 'â¬¢',
-  },
-};
-
-/* â”€â”€â”€ Job status display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 export const JOB_STATUS_META: Record<
   JobStatus,

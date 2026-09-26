@@ -43,7 +43,7 @@ export async function getModelConfig(): Promise<StoredModelConfig> {
   const initial: StoredModelConfig = {
     _id: CONFIG_ID,
     provider: 'vllm',
-    baseUrl: process.env.MODEL_BASE_URL?.trim() || 'http://127.0.0.1:8000',
+    baseUrl: process.env.MODEL_BASE_URL?.trim() || 'http://host.docker.internal:8000',
     model:
       process.env.MODEL_NAME?.trim() ||
       'Qwen/Qwen2-VL-2B-Instruct',
@@ -87,7 +87,7 @@ export async function updateModelConfig(input: {
     model: input.model.trim(),
     apiKey:
       input.apiKey === undefined || input.apiKey === ''
-        ? current.apiKey
+        ? (current.provider === input.provider ? current.apiKey : '')
         : input.apiKey.trim(),
     updatedAt: now,
   };

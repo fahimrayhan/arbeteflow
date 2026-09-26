@@ -2,6 +2,7 @@ import type {
   InterviewDifficulty,
   InterviewType,
   JobApplication,
+  JobMarketMatch,
   JobStatus,
   Message,
 } from "./types";
@@ -125,6 +126,14 @@ export async function savePrimaryResume(input: {
   );
 
   return response.resume;
+}
+
+export async function deletePrimaryResume(): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/resume/primary`, {
+    method: 'DELETE',
+    headers: headers(),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
 }
 
 export async function streamResumeEnhancement(
@@ -446,4 +455,20 @@ export function apiMessagesToUiMessages(
     content: message.content,
     timestamp: new Date(message.createdAt),
   }));
+}
+
+export async function getJobMarketHealth(): Promise<{ available: boolean; total_jobs_indexed?: number; model?: string; error?: string }> {
+  return request<{ available: boolean; total_jobs_indexed?: number; model?: string; error?: string }>('/api/finder/health');
+}
+
+export async function searchJobMarket(query: string, limit = 10): Promise<{ jobs: JobMarketMatch[]; count: number; query: string }> {
+  return request<{ jobs: JobMarketMatch[]; count: number; query: string }>('/api/finder/search', { method: 'POST', body: JSON.stringify({ query, limit }) });
+}
+
+export async function recommendJobMarket(input: { limit?: number } = {}): Promise<{ jobs: JobMarketMatch[]; count: number; query: string }> {
+  return request<{ jobs: JobMarketMatch[]; count: number; query: string }>('/api/finder/recommend', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export async function syncJobMarket(queries?: string[], limit = 30): Promise<{ message?: string; status: string }> {
+  return request<{ message?: string; status: string }>('/api/finder/sync', { method: 'POST', body: JSON.stringify({ queries, limit }) });
 }

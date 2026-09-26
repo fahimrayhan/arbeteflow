@@ -83,3 +83,16 @@ resumeRouter.put("/primary", requireAuth, async (req, res, next) => {
     next(error);
   }
 });
+
+resumeRouter.delete("/primary", requireAuth, async (req, res, next) => {
+  try {
+    const db = await getDb();
+    await db.collection<ResumeDocument>("resumes").deleteOne({
+      userId: req.user!.id,
+      isPrimary: true,
+    });
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});

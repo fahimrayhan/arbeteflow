@@ -335,7 +335,7 @@ export default function Chat() {
                   ? 'Creating a new session…'
                   : streaming
                     ? 'Coach is responding…'
-                    : 'New conversations are saved locally.'}
+                    : 'New conversations are saved to the backend.'}
               </p>
             </div>
           </div>

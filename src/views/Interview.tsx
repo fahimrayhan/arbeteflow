@@ -818,7 +818,7 @@ export default function Interview() {
               color: 'var(--color-muted-foreground)',
             }}
           >
-            This interview is saved locally. Start a new interview to continue
+            This interview is saved to the backend. Start a new interview to continue
             practicing.
           </div>
         )}

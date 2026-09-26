@@ -1,163 +1,64 @@
-# CareerAI — AI-Powered Job Platform
+# ArbetaFlow
 
-CareerAI is a fully browser-based career platform for students and job seekers. It uses AI to enhance resumes, generate cover letters, provide coaching through chat, and track job applications — all without a backend. Every API call goes directly from your browser to the AI provider of your choice.
-
----
+ArbetaFlow is a career workspace for managing resumes and applications, practicing interviews, generating cover letters, and finding Swedish job listings. The React app uses an Express API, MongoDB for user data and model settings, and a Python vector service for job search.
 
 ## Features
 
-### Resume Enhancer
-Paste your existing resume, set a target role and industry, and the AI rewrites it with stronger action verbs, quantified achievements, ATS-friendly keywords, and cleaner structure. The enhanced version streams in live as the AI writes it. Export as a formatted **PDF** or plain text.
+- Resume editing, PDF text extraction, AI enhancement, and PDF export.
+- AI cover letters, career coaching, and interview practice.
+- MongoDB-backed application tracker; saved applications are also used as AI coach context.
+- Semantic job search and resume matching against Arbetsförmedlingen listings.
+- Provider settings for vLLM, Ollama, OpenAI, and Anthropic.
 
-### Cover Letter Generator
-Fill in the job title, company, tone, and optional details (job description, background, achievements). The AI generates a personalized, compelling cover letter tailored to the role. Inline editing, copy, and **PDF export** included.
+## Run with Docker Compose
 
-### AI Coach Chat
-Three coaching modes in one conversation interface:
+Docker Compose starts MongoDB, the job vector service, and the Express API. The Vite frontend runs on the host.
 
-| Mode | Purpose |
-|---|---|
-| **Resume Coach** | Detailed feedback on your CV — gaps, weak language, ATS issues |
-| **Career Advisor** | Career pivots, skill planning, salary negotiation, personal branding |
-| **Job Critic** | Honest breakdown of job postings — red flags, realistic expectations, interview questions to ask |
-
-Conversations persist per mode. The chat can optionally load your Job Tracker data as memory, so the AI knows your full application pipeline.
-
-### Job Tracker
-A Kanban board with six columns: **Bookmarked → Applied → Screening → Interview → Offer → Rejected**. Add, edit, and move applications. Each card stores company, role, location, salary, dates, notes, and a link. Tracker data feeds directly into the AI chat as context.
-
-### Settings
-Connect up to four AI providers. Switch models without leaving the app. API keys are stored in `localStorage` only — nothing passes through any third-party server.
-
----
-
-## AI Providers
-
-| Provider | Models |
-|---|---|
-| **Anthropic (Claude)** | Claude Opus 5, Claude Sonnet 5, Claude Haiku 4.5 |
-| **OpenAI (ChatGPT)** | GPT-4o, GPT-4o Mini, o3, o4 Mini |
-| **Google (Gemini)** | Gemini 2.5 Pro, Gemini 2.5 Flash, Gemini 2.0 Flash |
-| **Ollama (Local)** | Llama 3.3, Llama 3.2, Mistral, Gemma 3, Phi-4, Qwen 2.5, DeepSeek R1, custom |
-
-You can run multiple providers simultaneously and switch between them mid-session from the model picker in the chat toolbar.
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Framework | React 19 |
-| Build | Vite 8 |
-| Styling | Tailwind CSS v4 |
-| Language | TypeScript 5.7 |
-| Icons | lucide-react |
-| Fonts | Instrument Sans · Inter · JetBrains Mono |
-| Storage | Browser `localStorage` |
-| AI | Direct browser → provider API (SSE streaming) |
-
-No database. No auth server. No backend. Everything runs in the browser.
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 20+
-- pnpm (or npm / yarn)
-- An API key from at least one supported provider — or a local [Ollama](https://ollama.ai) installation
-
-### Install & run
-
-```bash
-git clone https://github.com/your-username/careerai.git
-cd careerai
-pnpm install
-pnpm dev
+```sh
+docker compose up --build
 ```
 
-Open `http://localhost:8443` in your browser.
+In a second terminal:
 
-### Build for production
-
-```bash
-pnpm build
-pnpm preview
+```sh
+npm install
+npm run dev
 ```
 
----
+Open `http://localhost:3000`. The API is available at `http://localhost:8787`; MongoDB data and the vector index persist in named Docker volumes.
 
-## Configuration
+The default local authentication uses one development user ID and is intended only for a local single-user setup. For a shared or public deployment, replace `requireAuth` with verified session/JWT authentication and configure the frontend `VITE_DEVELOPMENT_USER_ID` per authenticated user. Do not expose the development API publicly.
 
-All settings are managed in-app via the **Settings** view. No `.env` file is required for standard usage.
+## AI provider setup
 
-| Setting | Description |
-|---|---|
-| Anthropic API key | Get from [console.anthropic.com](https://console.anthropic.com/settings/keys) |
-| OpenAI API key | Get from [platform.openai.com](https://platform.openai.com/api-keys) |
-| Gemini API key | Get from [Google AI Studio](https://aistudio.google.com/app/apikey) — free tier available |
-| Ollama base URL | Default: `http://localhost:11434` — run `OLLAMA_ORIGINS=* ollama serve` |
+Open **Settings** in the app and select a provider, base URL, model, and (where required) API key. The API stores the active provider configuration in MongoDB and sends AI requests from the server. Provider keys are not returned to the browser.
 
-### Vite environment variables
+When the API runs in Docker, use `http://host.docker.internal:8000` for a vLLM instance on the host and `http://host.docker.internal:11434` for host Ollama. The Compose file configures the host gateway for this purpose. OpenAI and Anthropic use their respective API base URLs.
 
-| Variable | Default | Description |
+Optional Compose variables:
+
+| Variable | Default | Purpose |
 |---|---|---|
-| `PORT` | `8443` | Dev server port |
-| `FIGMA_PUBLIC_URL` | — | Base URL for production assets (set when hosting behind a sub-path) |
-| `FIGMA_DEV_SERVER_HOST` | `0.0.0.0` | Dev server bind address |
+| `MODEL_NAME` | `Qwen/Qwen2-VL-2B-Instruct` | Initial model config when MongoDB has no saved configuration |
+| `MODEL_API_KEY` | `local-dev-secret` | Initial local model credential |
+| `VITE_API_BASE_URL` | `http://localhost:8787` | API URL used by the browser |
+| `VITE_DEVELOPMENT_USER_ID` | `manolis-local-dev` | Development data partition key |
 
----
+## Local API development
 
-## Project Structure
+To run the Node API outside Docker, configure `server/.env` with at least `MONGODB_URI`, `MODEL_NAME`, and `ALLOW_DEVELOPMENT_AUTH=true`, then run:
 
-```
-src/
-├── App.tsx              # Root shell, sidebar, theme toggle, AppContext
-├── index.css            # Tailwind v4 import + dark/light theme tokens
-├── main.tsx             # React entry point
-├── lib/
-│   ├── api.ts           # Multi-provider AI routing + SSE streaming
-│   ├── pdf.ts           # Resume & cover letter PDF export
-│   ├── storage.ts       # localStorage persistence + migration
-│   └── types.ts         # Shared types, provider metadata, model lists
-└── views/
-    ├── Chat.tsx         # Three-mode AI coaching chat
-    ├── CoverLetter.tsx  # Cover letter generator
-    ├── Resume.tsx       # Resume enhancer
-    ├── Settings.tsx     # API key & model configuration
-    └── Tracker.tsx      # Kanban job application tracker
+```sh
+cd server
+npm install
+npm run dev
 ```
 
----
+For Job Finder outside Compose, set `JOBS_SERVICE_URL` to the reachable Python vector service URL.
 
-## Privacy
+## Data and privacy
 
-- **API keys** are stored in `localStorage` and never sent anywhere except the chosen AI provider's official API endpoint.
-- **Your data** (job applications, resume text, chat history) lives entirely in the browser. There is no account, no sync, and no analytics unless you configure a Google Analytics ID in `.figma/make/site.json`.
-- **Clearing browser storage** removes all data permanently.
-
----
-
-## Dark / Light Mode
-
-The app ships with a dark theme by default. A toggle in the sidebar (and the mobile top bar) switches to a lime-green light mode. The preference is saved to `localStorage`.
-
----
-
-## PDF Export
-
-Resume and cover letter views include an **Export PDF** button. Clicking it opens a styled print window and triggers the browser's native "Save as PDF" dialog. The PDF renderer:
-
-- Detects name, contact info, section headers, job entries, and bullet points automatically
-- Applies professional typography (Calibri / Arial, 10.5 pt body)
-- Highlights section headers in the app's lime-green accent colour
-- Formats cover letters with a role/company header block
-
-No third-party PDF library is required — the browser handles rendering.
-
----
+Resumes, chat sessions, interviews, applications, and model configuration are stored in MongoDB. Job listing embeddings live in the Python service's Chroma volume. AI prompts and resume content are sent from the API to the provider configured in Settings. Back up the Docker volumes to preserve application data.
 
 ## License
 

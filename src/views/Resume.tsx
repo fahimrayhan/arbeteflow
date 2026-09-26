@@ -14,6 +14,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import {
+  deletePrimaryResume,
   getPrimaryResume,
   savePrimaryResume,
   streamResumeEnhancement,
@@ -142,7 +143,7 @@ export default function Resume() {
 
     try {
       await persistResume(input, enhanced);
-      setNotice('Your resume was saved locally.');
+      setNotice('Your resume was saved to the backend.');
     } catch (saveError) {
       setError(
         saveError instanceof Error
@@ -179,7 +180,7 @@ export default function Resume() {
         await persistResume(extractedText);
 
         setNotice(
-          `Extracted text from ${file.name} and saved it locally. The PDF itself was not saved.`,
+          `Extracted text from ${file.name} and saved it to the backend. The PDF itself was not saved.`,
         );
       } catch (saveError) {
         setNotice(
@@ -236,7 +237,7 @@ export default function Resume() {
 
       await persistResume(input, fullEnhancedResume);
 
-      setNotice('Enhanced resume generated and saved locally.');
+      setNotice('Enhanced resume generated and saved to the backend.');
     } catch (enhanceError) {
       setError(
         enhanceError instanceof Error
@@ -302,11 +303,22 @@ export default function Resume() {
     exportResumePDF(enhanced, filename);
   }
 
-  function handleClear() {
-    setInput('');
-    setEnhanced('');
+  async function handleClear() {
+    if (loading || saving || extracting) return;
+    setSaving(true);
     setError('');
     setNotice('');
+    try {
+      await deletePrimaryResume();
+    } catch (clearError) {
+      setError(clearError instanceof Error ? clearError.message : 'Could not clear your saved resume.');
+      setSaving(false);
+      return;
+    }
+    setInput('');
+    setEnhanced('');
+    setNotice('Saved resume cleared.');
+    setSaving(false);
   }
 
   function handleLoadSample() {

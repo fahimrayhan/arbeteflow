@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, X, ExternalLink, Calendar, DollarSign, MapPin, ChevronDown, Briefcase, Pencil, Trash2 } from 'lucide-react';
-import { loadJobs, saveJobs } from '../lib/storage';
+import { createJob, deleteJob, getJobs, updateJob } from '../lib/api';
 import type { JobApplication, JobStatus } from '../lib/types';
 import { JOB_STATUS_META } from '../lib/types';
 
@@ -349,10 +349,16 @@ function JobModal({
 }
 
 export default function Tracker() {
-  const [jobs, setJobs] = useState<JobApplication[]>(loadJobs);
+  const [jobs, setJobs] = useState<JobApplication[]>([]);
+  const [error, setError] = useState('');
+  const [loadingJobs, setLoadingJobs] = useState(true);
   const [modal, setModal] = useState<{ open: boolean; job: Partial<JobApplication> & { status: JobStatus } } | null>(null);
 
-  useEffect(() => { saveJobs(jobs); }, [jobs]);
+  useEffect(() => {
+    getJobs().then(setJobs).catch((loadError) => {
+      setError(loadError instanceof Error ? loadError.message : 'Could not load saved applications.');
+    }).finally(() => setLoadingJobs(false));
+  }, []);
 
   const openAdd = (status: JobStatus = 'applied') =>
     setModal({ open: true, job: { status } });
@@ -360,19 +366,40 @@ export default function Tracker() {
   const openEdit = (job: JobApplication) =>
     setModal({ open: true, job });
 
-  const handleSave = (job: JobApplication) => {
-    setJobs((prev) => {
-      const exists = prev.find((j) => j.id === job.id);
-      return exists ? prev.map((j) => (j.id === job.id ? job : j)) : [...prev, job];
-    });
-    setModal(null);
+  const handleSave = async (job: JobApplication) => {
+    setError('');
+    try {
+      const saved = jobs.some((existing) => existing.id === job.id)
+        ? await updateJob(job.id, job)
+        : await createJob(job);
+      setJobs((prev) => {
+        const exists = prev.some((item) => item.id === saved.id);
+        return exists ? prev.map((item) => item.id === saved.id ? saved : item) : [...prev, saved];
+      });
+      setModal(null);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Could not save the application.');
+    }
   };
 
-  const handleDelete = (id: string) =>
-    setJobs((prev) => prev.filter((j) => j.id !== id));
+  const handleDelete = async (id: string) => {
+    setError('');
+    try {
+      await deleteJob(id);
+      setJobs((prev) => prev.filter((job) => job.id !== id));
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Could not delete the application.');
+    }
+  };
 
-  const handleStatusChange = (id: string, status: JobStatus) =>
-    setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, status } : j)));
+  const handleStatusChange = async (id: string, status: JobStatus) => {
+    try {
+      const updated = await updateJob(id, { status });
+      setJobs((prev) => prev.map((job) => job.id === id ? updated : job));
+    } catch (statusError) {
+      setError(statusError instanceof Error ? statusError.message : 'Could not update the application.');
+    }
+  };
 
   const stats = {
     total: jobs.length,
@@ -383,6 +410,8 @@ export default function Tracker() {
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--color-background)' }}>
+      {error && <div role="alert" className="mx-6 mt-4 rounded-lg px-3 py-2 text-sm" style={{ color: '#F87171', background: 'rgba(248,113,113,0.08)' }}>{error}</div>}
+      {loadingJobs && <div className="px-6 py-3 text-sm" style={{ color: 'var(--color-muted-foreground)' }}>Loading saved applications…</div>}
       {/* Header */}
       <div
         className="flex items-center justify-between px-6 py-4 shrink-0"

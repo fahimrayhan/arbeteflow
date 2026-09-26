@@ -14,6 +14,7 @@ import { resumeRouter } from "./routes/resume.js";
 import { coverLetterRouter } from "./routes/coverLetter.js";
 import { resumeEnhanceRouter } from "./routes/resumeEnhance.js";
 import { modelSettingsRouter } from './routes/modelSettings.js';
+import { finderRouter } from './routes/finder.js';
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.use("/api/interviews", interviewRouter);
 app.use("/api/cover-letter", coverLetterRouter);
 app.use("/api/resume/enhance", resumeEnhanceRouter);
 app.use('/api/settings/model', modelSettingsRouter);
+app.use('/api/finder', finderRouter);
 
 app.use(
   (

@@ -34,7 +34,7 @@ const PROVIDERS: Array<{
     id: 'vllm',
     label: 'Local vLLM',
     description: 'OpenAI-compatible server running on your computer',
-    defaultBaseUrl: 'http://127.0.0.1:8000',
+    defaultBaseUrl: 'http://host.docker.internal:8000',
     defaultModel: 'Qwen/Qwen2-VL-2B-Instruct',
     requiresApiKey: true,
   },
@@ -42,7 +42,7 @@ const PROVIDERS: Array<{
     id: 'ollama',
     label: 'Local Ollama',
     description: 'Ollama local model server',
-    defaultBaseUrl: 'http://127.0.0.1:11434',
+    defaultBaseUrl: 'http://host.docker.internal:11434',
     defaultModel: 'qwen2.5:7b-instruct',
     requiresApiKey: false,
   },
@@ -132,6 +132,9 @@ export default function SettingsView() {
       model: nextProvider.defaultModel,
       apiKey: '',
     }));
+    setStoredConfig((current) => current
+      ? { ...current, provider, hasApiKey: current.provider === provider && current.hasApiKey }
+      : current);
 
     setNotice('');
     setError('');
@@ -139,6 +142,11 @@ export default function SettingsView() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (activeProvider.requiresApiKey && !form.apiKey && !storedConfig?.hasApiKey) {
+      setError('Enter an API key for this provider before saving.');
+      return;
+    }
 
     setSaving(true);
     setError('');
@@ -196,9 +204,8 @@ export default function SettingsView() {
           className="mt-2 max-w-2xl"
           style={{ color: 'var(--color-muted-foreground)' }}
         >
-          Configure which model provider CareerAI uses. Your browser talks only
-          to the local backend; provider credentials are never returned to the
-          browser after saving.
+          Configure the provider used by AI requests. Credentials are stored in
+          MongoDB and are never returned to the browser after saving.
         </p>
       </div>
 
@@ -233,8 +240,8 @@ export default function SettingsView() {
               className="text-sm mt-1"
               style={{ color: 'var(--color-muted-foreground)' }}
             >
-              Change the local vLLM host and port, select a local model, or
-              prepare the app for a hosted provider.
+              Select the provider and model used for resume, chat, interview,
+              and cover letter requests.
             </p>
           </div>
         </div>
@@ -318,7 +325,7 @@ export default function SettingsView() {
               className="text-xs font-normal"
               style={{ color: 'var(--color-muted-foreground)' }}
             >
-              For vLLM use <code>http://127.0.0.1:8000</code>. Do not append
+              In Docker use <code>http://host.docker.internal:8000</code> for vLLM. Do not append
               <code> /v1</code>.
             </span>
           </label>

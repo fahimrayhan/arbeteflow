@@ -1,7 +1,7 @@
 services:
   mongodb:
     image: mongo:8
-    container_name: jobfinder-mongodb
+    container_name: arbeteflow-mongodb
     restart: unless-stopped
     ports:
       - "127.0.0.1:27017:27017"
@@ -10,6 +10,58 @@ services:
       GLIBC_TUNABLES: "glibc.pthread.rseq=1"
     volumes:
       - jobfinder_mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  jobs-service:
+    build:
+      context: ./jobs-service
+      dockerfile: Dockerfile
+    container_name: arbeteflow-jobs-service
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:8000"
+    environment:
+      - CHROMA_PATH=/app/chroma_jobs
+      - EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - chroma_jobs_data:/app/chroma_jobs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: arbeteflow-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8787:8787"
+    environment:
+      PORT: 8787
+      CLIENT_ORIGIN: http://localhost:3000
+      MONGODB_URI: mongodb://mongodb:27017/jobfinder
+      MONGODB_DB_NAME: jobfinder
+      JOBS_SERVICE_URL: http://jobs-service:8000
+      MODEL_BASE_URL: http://host.docker.internal:8000
+      MODEL_NAME: ${MODEL_NAME:-Qwen/Qwen2-VL-2B-Instruct}
+      MODEL_API_KEY: ${MODEL_API_KEY:-local-dev-secret}
+      ALLOW_DEVELOPMENT_AUTH: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      jobs-service:
+        condition: service_started
 
 volumes:
   jobfinder_mongodb_data:
+  chroma_jobs_data:

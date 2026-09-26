@@ -124,7 +124,7 @@ chatRouter.get(
       const session = await db
         .collection<ChatSessionDocument>('chatSessions')
         .findOne({
-          _id: parseSessionId(req.params.sessionId),
+          _id: parseSessionId(String(req.params.sessionId)),
           userId: req.user!.id,
         });
 
@@ -155,7 +155,7 @@ chatRouter.post(
       const session = await db
         .collection<ChatSessionDocument>('chatSessions')
         .findOne({
-          _id: parseSessionId(req.params.sessionId),
+          _id: parseSessionId(String(req.params.sessionId)),
           userId: req.user!.id,
         });
 

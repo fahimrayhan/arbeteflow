@@ -137,7 +137,7 @@ interviewRouter.get("/:interviewId", requireAuth, async (req, res, next) => {
     const interview = await db
       .collection<InterviewSessionDocument>("interviewSessions")
       .findOne({
-        _id: parseObjectId(req.params.interviewId, "interview ID"),
+        _id: parseObjectId(String(req.params.interviewId), "interview ID"),
         userId: req.user!.id,
       });
 
@@ -163,7 +163,7 @@ interviewRouter.post(
       const interview = await db
         .collection<InterviewSessionDocument>("interviewSessions")
         .findOne({
-          _id: parseObjectId(req.params.interviewId, "interview ID"),
+          _id: parseObjectId(String(req.params.interviewId), "interview ID"),
           userId: req.user!.id,
         });
 
