@@ -1,22 +1,33 @@
 import type { ObjectId } from "mongodb";
 
-export type JobStatus =
-  | "bookmarked"
-  | "applied"
-  | "screening"
-  | "interview"
-  | "offer"
-  | "rejected";
+/*
+  Enum values are declared once as const tuples so the same source feeds
+  both the TypeScript types and the zod request schemas.
+*/
+export const JOB_STATUSES = [
+  "bookmarked",
+  "applied",
+  "screening",
+  "interview",
+  "offer",
+  "rejected",
+] as const;
+export type JobStatus = (typeof JOB_STATUSES)[number];
 
-export type CoachMode = "resume" | "career" | "jobcritic";
+export const COACH_MODES = ["resume", "career", "jobcritic"] as const;
+export type CoachMode = (typeof COACH_MODES)[number];
 
-export type InterviewType =
-  | "behavioral"
-  | "technical"
-  | "mixed"
-  | "case";
+export const INTERVIEW_TYPES = ["behavioral", "technical", "mixed", "case"] as const;
+export type InterviewType = (typeof INTERVIEW_TYPES)[number];
 
-export type InterviewDifficulty = "junior" | "mid" | "senior";
+export const INTERVIEW_DIFFICULTIES = ["junior", "mid", "senior"] as const;
+export type InterviewDifficulty = (typeof INTERVIEW_DIFFICULTIES)[number];
+
+export const MODEL_PROVIDERS = ["vllm", "ollama", "openai", "anthropic"] as const;
+export type ModelProvider = (typeof MODEL_PROVIDERS)[number];
+
+export const COVER_LETTER_TONES = ["professional", "confident", "warm"] as const;
+export type CoverLetterTone = (typeof COVER_LETTER_TONES)[number];
 
 export interface StoredMessage {
   id: string;
@@ -83,6 +94,15 @@ export interface InterviewSessionDocument {
   messages: StoredMessage[];
   feedback?: InterviewFeedback;
   createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface StoredModelConfig {
+  _id: "model-configuration";
+  provider: ModelProvider;
+  baseUrl: string;
+  model: string;
+  apiKey: string;
   updatedAt: Date;
 }
 

@@ -1,0 +1,131 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+@theme inline {
+  --font-display: 'Instrument Sans', sans-serif;
+  --font-body:    'Inter', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  /* ── Dark mode defaults ─────────────────────────────────────────── */
+  --color-background:           #0D0D0D;
+  --color-foreground:           #F4F4F2;
+  --color-card:                 #161616;
+  --color-card-foreground:      #F4F4F2;
+
+  --color-primary:              #A3E635;
+  --color-primary-foreground:   #111800;
+
+  --color-secondary:            #222222;
+  --color-secondary-foreground: #A0A0A0;
+
+  --color-muted:                #111111;
+  --color-muted-foreground:     #6B6B6B;
+
+  --color-accent:               #4ADE80;
+  --color-accent-foreground:    #052010;
+
+  --color-border:               #272727;
+  --color-ring:                 #A3E635;
+  --color-destructive:          #EF4444;
+
+  /* Sidebar */
+  --color-sidebar:              #141414;
+  --color-sidebar-border:       #272727;
+
+  /* Primary glow */
+  --shadow-primary-glow:        0 0 18px rgba(163,230,53,0.3);
+  --shadow-btn-glow:            0 2px 12px rgba(163,230,53,0.25);
+}
+
+/* ── Light mode overrides ─────────────────────────────────────────── */
+[data-theme="light"] {
+  --color-background:           #F7F8F4;
+  --color-foreground:           #171717;
+  --color-card:                 #FFFFFF;
+  --color-card-foreground:      #171717;
+
+  --color-primary:              #65A30D;
+  --color-primary-foreground:   #FFFFFF;
+
+  --color-secondary:            #F0F1EB;
+  --color-secondary-foreground: #525252;
+
+  --color-muted:                #EBEBE6;
+  --color-muted-foreground:     #737373;
+
+  --color-accent:               #16A34A;
+  --color-accent-foreground:    #FFFFFF;
+
+  --color-border:               #E1E2DC;
+  --color-ring:                 #65A30D;
+  --color-destructive:          #DC2626;
+
+  --color-sidebar:              #FFFFFF;
+  --color-sidebar-border:       #E1E2DC;
+
+  --shadow-primary-glow:        0 0 18px rgba(101,163,13,0.2);
+  --shadow-btn-glow:            0 2px 12px rgba(101,163,13,0.2);
+}
+
+/* ── Semantic tokens (dark values are the original look) ─────────────── */
+:root {
+  color-scheme: dark; /* native date pickers, selects and scrollbars follow the theme */
+
+  --danger-text:    #F87171;
+  --danger-bg:      rgba(248,113,113,0.08);
+  --danger-border:  rgba(248,113,113,0.22);
+  --success-text:   #A3E635;
+  --warning-text:   #FBBF24;
+  --info-text:      #60A5FA;
+  --shadow-lg:      0 8px 32px rgba(0,0,0,0.5);
+
+  /* Job status badges */
+  --status-bookmarked-color: #909090; --status-bookmarked-bg: #1A1A1A; --status-bookmarked-border: #282828;
+  --status-applied-color:    #A3E635; --status-applied-bg:    #141900; --status-applied-border:    #2A3300;
+  --status-screening-color:  #FBBF24; --status-screening-bg:  #1A1200; --status-screening-border:  #352400;
+  --status-interview-color:  #60A5FA; --status-interview-bg:  #091420; --status-interview-border:  #0A2040;
+  --status-offer-color:      #4ADE80; --status-offer-bg:      #061410; --status-offer-border:      #0A2A1A;
+  --status-rejected-color:   #F87171; --status-rejected-bg:   #1A0808; --status-rejected-border:   #330E0E;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --danger-text:    #DC2626;
+  --danger-bg:      rgba(220,38,38,0.07);
+  --danger-border:  rgba(220,38,38,0.25);
+  --success-text:   #4D7C0F;
+  --warning-text:   #B45309;
+  --info-text:      #2563EB;
+  --shadow-lg:      0 8px 32px rgba(0,0,0,0.14);
+
+  --status-bookmarked-color: #6B7280; --status-bookmarked-bg: #F3F4F6; --status-bookmarked-border: #E5E7EB;
+  --status-applied-color:    #4D7C0F; --status-applied-bg:    #F7FEE7; --status-applied-border:    #D9F99D;
+  --status-screening-color:  #B45309; --status-screening-bg:  #FFFBEB; --status-screening-border:  #FDE68A;
+  --status-interview-color:  #1D4ED8; --status-interview-bg:  #EFF6FF; --status-interview-border:  #BFDBFE;
+  --status-offer-color:      #15803D; --status-offer-bg:      #F0FDF4; --status-offer-border:      #BBF7D0;
+  --status-rejected-color:   #B91C1C; --status-rejected-bg:   #FEF2F2; --status-rejected-border:   #FECACA;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────── */
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s ease, color 0.2s ease;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+* { scrollbar-width: thin; scrollbar-color: var(--color-border) transparent; }
+::-webkit-scrollbar          { width: 4px; height: 4px; }
+::-webkit-scrollbar-track    { background: transparent; }
+::-webkit-scrollbar-thumb    { background: var(--color-border); border-radius: 2px; }
+
+::selection { background: rgba(163, 230, 53, 0.22); }

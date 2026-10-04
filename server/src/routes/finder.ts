@@ -1,22 +1,38 @@
 import { Router } from "express";
 import { z } from "zod";
 import { config } from "../config.js";
-import { getDb } from "../db.js";
+import { collections } from "../db.js";
+import { asyncHandler, badRequest, userIdOf } from "../lib/http.js";
 import { requireAuth } from "../middleware/auth.js";
-import type { ResumeDocument } from "../types.js";
+import { callJobsService } from "../services/jobsService.js";
 
-const searchInputSchema = z.object({
-  query: z.string().trim().min(1).max(1000),
+const filterSchema = z.object({
   limit: z.number().int().min(1).max(50).optional().default(10),
+  /** Only ads whose location contains this text (e.g. "Göteborg"). */
+  location: z.string().trim().max(100).optional(),
+  /** Only ads published within this many days. */
+  maxAgeDays: z.number().int().min(1).max(365).optional(),
 });
 
-const recommendInputSchema = z.object({
+/** Maps API filter names to the vector service's snake_case fields, dropping empty values. */
+function toServiceFilters(input: z.infer<typeof filterSchema>) {
+  return {
+    limit: input.limit,
+    location: input.location || undefined,
+    max_age_days: input.maxAgeDays,
+  };
+}
+
+const searchInputSchema = filterSchema.extend({
+  query: z.string().trim().min(1).max(1000),
+});
+
+const recommendInputSchema = filterSchema.extend({
   cv: z.string().trim().max(50_000).optional(),
-  limit: z.number().int().min(1).max(50).optional().default(10),
 });
 
 const syncInputSchema = z.object({
-  queries: z.array(z.string().trim().min(1).max(100)).optional(),
+  queries: z.array(z.string().trim().min(1).max(100)).max(20).optional(),
   limit: z.number().int().min(5).max(100).optional().default(30),
 });
 
@@ -27,31 +43,16 @@ export const finderRouter = Router();
  */
 finderRouter.get("/health", async (_req, res) => {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
-
-    const response = await fetch(`${config.jobsServiceUrl}/health`, {
-      signal: controller.signal,
+    const data = await callJobsService<Record<string, unknown>>("/health", {
+      method: "GET",
+      timeoutMs: 4_000,
     });
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      res.status(502).json({
-        available: false,
-        error: `Vector service responded with status ${response.status}`,
-      });
-      return;
-    }
-
-    const data = await response.json();
-    res.json({ available: true, ...data });
+    res.json({ ...data, available: true });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Vector service unreachable.";
     res.json({
       available: false,
-      error: message,
-      hint: "Make sure the jobs-service container is running on " + config.jobsServiceUrl,
+      error: error instanceof Error ? error.message : "Vector service unreachable.",
+      hint: `Make sure the jobs-service container is running on ${config.jobsServiceUrl}`,
     });
   }
 });
@@ -59,122 +60,60 @@ finderRouter.get("/health", async (_req, res) => {
 /**
  * Search job listings using semantic vector search
  */
-finderRouter.post("/search", requireAuth, async (req, res, next) => {
-  try {
+finderRouter.post(
+  "/search",
+  requireAuth,
+  asyncHandler(async (req, res) => {
     const input = searchInputSchema.parse(req.body);
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
-
-    const response = await fetch(`${config.jobsServiceUrl}/jobs/search`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query: input.query,
-        limit: input.limit,
+    res.json(
+      await callJobsService("/jobs/search", {
+        body: { query: input.query, ...toServiceFilters(input) },
+        timeoutMs: 12_000,
       }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      const err = await response.text();
-      res.status(response.status).json({
-        error: `Search error from vector engine: ${err}`,
-      });
-      return;
-    }
-
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      res.status(504).json({ error: "Vector search service timed out." });
-      return;
-    }
-    next(error);
-  }
-});
+    );
+  }),
+);
 
 /**
  * Recommend jobs using the user's primary CV stored in MongoDB
  */
-finderRouter.post("/recommend", requireAuth, async (req, res, next) => {
-  try {
+finderRouter.post(
+  "/recommend",
+  requireAuth,
+  asyncHandler(async (req, res) => {
     const input = recommendInputSchema.parse(req.body);
     let cvText = input.cv;
 
-    // If no CV was explicitly submitted in the request payload,
-    // automatically retrieve the user's primary resume from MongoDB
+    // Without an explicit CV in the payload, fall back to the user's saved primary resume.
     if (!cvText) {
-      const db = await getDb();
-      const resume = await db.collection<ResumeDocument>("resumes").findOne({
-        userId: req.user!.id,
-        isPrimary: true,
-      });
-
-      if (resume) {
-        cvText = resume.enhancedText || resume.rawText;
-      }
+      const { resumes } = await collections();
+      const resume = await resumes.findOne({ userId: userIdOf(req), isPrimary: true });
+      cvText = resume?.enhancedText || resume?.rawText;
     }
 
-    if (!cvText || !cvText.trim()) {
-      res.status(400).json({
-        error:
-          "No resume found. Please save a primary resume in the Resume tab or upload one first.",
-      });
-      return;
+    if (!cvText?.trim()) {
+      throw badRequest(
+        "No resume found. Please save a primary resume in the Resume tab or upload one first.",
+      );
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
-    const response = await fetch(`${config.jobsServiceUrl}/jobs/recommend`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        cv: cvText,
-        limit: input.limit,
+    res.json(
+      await callJobsService("/jobs/recommend", {
+        body: { cv: cvText, ...toServiceFilters(input) },
+        timeoutMs: 15_000,
       }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      const err = await response.text();
-      res.status(response.status).json({
-        error: `Recommendation error from vector engine: ${err}`,
-      });
-      return;
-    }
-
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      res.status(504).json({ error: "Vector recommendation service timed out." });
-      return;
-    }
-    next(error);
-  }
-});
+    );
+  }),
+);
 
 /**
  * Trigger sync of jobs from Arbetsförmedlingen API
  */
-finderRouter.post("/sync", requireAuth, async (req, res, next) => {
-  try {
+finderRouter.post(
+  "/sync",
+  requireAuth,
+  asyncHandler(async (req, res) => {
     const input = syncInputSchema.parse(req.body);
-
-    const response = await fetch(`${config.jobsServiceUrl}/jobs/sync`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    next(error);
-  }
-});
+    res.json(await callJobsService("/jobs/sync", { body: input, timeoutMs: 8_000 }));
+  }),
+);

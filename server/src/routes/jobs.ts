@@ -1,31 +1,33 @@
-import { ObjectId } from "mongodb";
 import { Router } from "express";
 import { z } from "zod";
-import { getDb } from "../db.js";
+import { collections } from "../db.js";
+import { asyncHandler, notFound, parseObjectId, userIdOf } from "../lib/http.js";
 import { requireAuth } from "../middleware/auth.js";
-import type { JobDocument, JobStatus } from "../types.js";
+import { JOB_STATUSES, type JobDocument } from "../types.js";
 
-const jobStatusSchema = z.enum([
-  "bookmarked",
-  "applied",
-  "screening",
-  "interview",
-  "offer",
-  "rejected",
-]);
+/** Only http(s) links are stored — blocks `javascript:` and other dangerous schemes. */
+const httpUrlSchema = z
+  .string()
+  .trim()
+  .max(2_000)
+  .url()
+  .refine((value) => /^https?:\/\//i.test(value), "URL must start with http:// or https://");
 
 const jobInputSchema = z.object({
   company: z.string().trim().min(1).max(200),
   role: z.string().trim().min(1).max(200),
   location: z.string().trim().max(200).default(""),
-  status: jobStatusSchema.default("bookmarked"),
+  status: z.enum(JOB_STATUSES).default("bookmarked"),
   salary: z.string().trim().max(100).optional(),
   appliedDate: z.string().trim().max(30).optional(),
   deadline: z.string().trim().max(30).optional(),
   notes: z.string().trim().max(10_000).default(""),
-  url: z.string().url().optional().or(z.literal("")),
+  url: httpUrlSchema.optional().or(z.literal("")),
   jobDescription: z.string().trim().max(50_000).optional(),
 });
+
+/** Optional fields that are removed from the document when sent as an empty string. */
+const CLEARABLE_FIELDS = ["salary", "appliedDate", "deadline", "url", "jobDescription"] as const;
 
 function serializeJob(job: JobDocument) {
   return {
@@ -45,119 +47,87 @@ function serializeJob(job: JobDocument) {
   };
 }
 
-function getJobId(value: string): ObjectId {
-  if (!ObjectId.isValid(value)) {
-    throw new Error("Invalid job ID.");
-  }
-
-  return new ObjectId(value);
-}
-
 export const jobsRouter = Router();
 
-jobsRouter.get("/", requireAuth, async (req, res, next) => {
-  try {
-    const db = await getDb();
+jobsRouter.use(requireAuth);
 
-    const jobs = await db
-      .collection<JobDocument>("jobs")
-      .find({ userId: req.user!.id })
-      .sort({ updatedAt: -1 })
-      .toArray();
+jobsRouter.get("/", asyncHandler(async (req, res) => {
+  const { jobs } = await collections();
 
-    res.json({ jobs: jobs.map(serializeJob) });
-  } catch (error) {
-    next(error);
-  }
-});
+  const userJobs = await jobs
+    .find({ userId: userIdOf(req) })
+    .sort({ updatedAt: -1 })
+    .limit(1_000)
+    .toArray();
 
-jobsRouter.post("/", requireAuth, async (req, res, next) => {
-  try {
-    const input = jobInputSchema.parse(req.body);
-    const now = new Date();
+  res.json({ jobs: userJobs.map(serializeJob) });
+}));
 
-    const job: JobDocument = {
-      userId: req.user!.id,
-      company: input.company,
-      role: input.role,
-      location: input.location,
-      status: input.status as JobStatus,
-      salary: input.salary || undefined,
-      appliedDate: input.appliedDate || undefined,
-      deadline: input.deadline || undefined,
-      notes: input.notes,
-      url: input.url || undefined,
-      jobDescription: input.jobDescription || undefined,
-      createdAt: now,
-      updatedAt: now,
-    };
+jobsRouter.post("/", asyncHandler(async (req, res) => {
+  const input = jobInputSchema.parse(req.body);
+  const now = new Date();
 
-    const db = await getDb();
-    const result = await db.collection<JobDocument>("jobs").insertOne(job);
+  const job: JobDocument = {
+    userId: userIdOf(req),
+    company: input.company,
+    role: input.role,
+    location: input.location,
+    status: input.status,
+    salary: input.salary || undefined,
+    appliedDate: input.appliedDate || undefined,
+    deadline: input.deadline || undefined,
+    notes: input.notes,
+    url: input.url || undefined,
+    jobDescription: input.jobDescription || undefined,
+    createdAt: now,
+    updatedAt: now,
+  };
 
-    res.status(201).json({
-      job: serializeJob({
-        ...job,
-        _id: result.insertedId,
-      }),
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+  const { jobs } = await collections();
+  const result = await jobs.insertOne(job);
 
-jobsRouter.patch("/:jobId", requireAuth, async (req, res, next) => {
-  try {
-    const input = jobInputSchema.partial().parse(req.body);
-    const db = await getDb();
+  res.status(201).json({ job: serializeJob({ ...job, _id: result.insertedId }) });
+}));
 
-    const result = await db
-      .collection<JobDocument>("jobs")
-      .findOneAndUpdate(
-        {
-          _id: getJobId(String(req.params.jobId)),
-          userId: req.user!.id,
-        },
-        {
-          $set: {
-            ...input,
-            ...(input.salary === "" ? { salary: undefined } : {}),
-            ...(input.url === "" ? { url: undefined } : {}),
-            updatedAt: new Date(),
-          },
-        },
-        {
-          returnDocument: "after",
-        },
-      );
+jobsRouter.patch("/:jobId", asyncHandler(async (req, res) => {
+  const input = jobInputSchema.partial().parse(req.body);
 
-    if (!result) {
-      res.status(404).json({ error: "Job not found." });
-      return;
+  const $set: Partial<JobDocument> = { ...input, updatedAt: new Date() };
+  const $unset: Partial<Record<keyof JobDocument, "">> = {};
+
+  for (const field of CLEARABLE_FIELDS) {
+    if (input[field] === "") {
+      delete $set[field];
+      $unset[field] = "";
     }
-
-    res.json({ job: serializeJob(result) });
-  } catch (error) {
-    next(error);
   }
-});
 
-jobsRouter.delete("/:jobId", requireAuth, async (req, res, next) => {
-  try {
-    const db = await getDb();
+  const { jobs } = await collections();
 
-    const result = await db.collection<JobDocument>("jobs").deleteOne({
-      _id: getJobId(String(req.params.jobId)),
-      userId: req.user!.id,
-    });
+  const result = await jobs.findOneAndUpdate(
+    { _id: parseObjectId(req.params.jobId, "job ID"), userId: userIdOf(req) },
+    Object.keys($unset).length ? { $set, $unset } : { $set },
+    { returnDocument: "after" },
+  );
 
-    if (result.deletedCount === 0) {
-      res.status(404).json({ error: "Job not found." });
-      return;
-    }
-
-    res.status(204).send();
-  } catch (error) {
-    next(error);
+  if (!result) {
+    throw notFound("Job not found.");
   }
-});
+
+  res.json({ job: serializeJob(result) });
+}));
+
+jobsRouter.delete("/:jobId", asyncHandler(async (req, res) => {
+  const { jobs } = await collections();
+
+  const result = await jobs.deleteOne({
+    _id: parseObjectId(req.params.jobId, "job ID"),
+    userId: userIdOf(req),
+  });
+
+  if (result.deletedCount === 0) {
+    throw notFound("Job not found.");
+  }
+
+  res.status(204).send();
+}));

@@ -1,23 +1,37 @@
 FROM python:3.11-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    MODEL_DIR=/opt/models/minilm \
+    CHROMA_PATH=/data/chroma \
+    # Keep ONNX Runtime and BLAS from spawning one thread per host core.
+    OMP_NUM_THREADS=2 \
+    EMBEDDING_THREADS=2 \
+    ANONYMIZED_TELEMETRY=False
+
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
+# All dependencies ship prebuilt wheels: no compiler, no curl, no apt layer.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
 
-# Pre-cache the multilingual sentence transformer model inside the image layer
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
+# Bake the int8 ONNX model (~240 MB) into the image so containers start offline and fast.
+COPY download_model.py .
+RUN HF_HOME=/tmp/hf python download_model.py && rm -rf /tmp/hf
 
-COPY . .
+RUN useradd --system --uid 10001 --home-dir /app app \
+    && mkdir -p /data/chroma \
+    && chown -R app:app /data
 
+COPY --chown=app:app *.py ./
+
+USER app
 EXPOSE 8000
 
-HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -f http://localhost:8000/health || exit 1
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)" || exit 1
 
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+# A single worker: the embedding model and Chroma's persistent directory are per-process.
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

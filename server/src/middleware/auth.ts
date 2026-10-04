@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import { config } from "../config.js";
 
+const USER_ID_PATTERN = /^[A-Za-z0-9._@-]{1,128}$/;
+
 /*
   DEVELOPMENT ONLY:
   Send x-user-id: any-stable-local-id from your frontend.
@@ -28,6 +30,11 @@ export function requireAuth(
         error:
           "Missing x-user-id. Set a stable development user ID in the frontend.",
       });
+      return;
+    }
+
+    if (!USER_ID_PATTERN.test(userId)) {
+      res.status(400).json({ error: "Invalid x-user-id header." });
       return;
     }
 

@@ -9,3 +9,4 @@ env
 .git
 .gitignore
 chroma_jobs
+models/
