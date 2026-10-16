@@ -33,8 +33,9 @@ const RECENCY_OPTIONS: Array<{ label: string; days: number | undefined }> = [
 ];
 
 const RESULT_LIMIT = 15;
-/** How long after starting a sync to refresh the "jobs indexed" counter. */
-const SYNC_REFRESH_DELAY_MS = 3000;
+/** A full sync covers every sector and takes minutes: poll its progress until it finishes. */
+const SYNC_POLL_INTERVAL_MS = 4000;
+const SYNC_POLL_MAX_ATTEMPTS = 150;
 
 function jobKey(match: JobMarketMatch, index: number): string {
   return match.metadata.id || match.metadata.url || `${match.metadata.title}-${index}`;
@@ -156,6 +157,22 @@ export default function JobFinder() {
     }
   }
 
+  /** Refresh the "jobs indexed" counter until the background sync reports it has finished. */
+  function pollSyncProgress(attempt: number) {
+    window.clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = window.setTimeout(async () => {
+      const health = await getJobMarketHealth().catch(() => null);
+      if (health) setServiceHealth(health);
+
+      if (health?.syncing && attempt < SYNC_POLL_MAX_ATTEMPTS) {
+        pollSyncProgress(attempt + 1);
+      } else {
+        setSyncing(false);
+        setSyncMessage('Sync finished.');
+      }
+    }, SYNC_POLL_INTERVAL_MS);
+  }
+
   async function handleTriggerSync() {
     setSyncing(true);
     setSyncMessage('');
@@ -163,13 +180,7 @@ export default function JobFinder() {
     try {
       const response = await syncJobMarket(undefined, 30);
       setSyncMessage(response.message || 'Job listings synchronization started.');
-
-      window.clearTimeout(syncTimerRef.current);
-      syncTimerRef.current = window.setTimeout(async () => {
-        const health = await getJobMarketHealth().catch(() => null);
-        if (health) setServiceHealth(health);
-        setSyncing(false);
-      }, SYNC_REFRESH_DELAY_MS);
+      pollSyncProgress(0);
     } catch (syncError) {
       setSyncMessage(getErrorMessage(syncError, 'Sync failed to start.'));
       setSyncing(false);
@@ -210,8 +221,8 @@ export default function JobFinder() {
             >
               <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: 'var(--color-accent)' }} />
               <span>
-                {serviceHealth.seeding
-                  ? 'Vector Engine Online (building index…)'
+                {serviceHealth.seeding || serviceHealth.syncing
+                  ? `Vector Engine Online (${serviceHealth.syncing ? 'syncing' : 'building index'}… ${serviceHealth.total_jobs_indexed ?? 0} jobs)`
                   : `Vector Engine Online (${serviceHealth.total_jobs_indexed ?? 0} jobs indexed)`}
               </span>
             </div>

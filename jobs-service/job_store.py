@@ -11,6 +11,7 @@ from chromadb.config import Settings as ChromaSettings
 from config import Settings
 from embeddings import Embedder
 from jobtech import JobRecord, JobTechClient, normalize_job
+from query_normalizer import clean_text, normalize_query
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("JobStore")
@@ -27,6 +28,7 @@ class JobStore:
         self._settings = settings
         self._sync_lock = threading.Lock()
         self._seeding = threading.Event()
+        self._syncing = threading.Event()
 
         settings.chroma_path.mkdir(parents=True, exist_ok=True)
         logger.info("Connecting to ChromaDB at %s", settings.chroma_path.resolve())
@@ -45,6 +47,7 @@ class JobStore:
             model_dir=settings.model_dir,
             threads=settings.embedding_threads,
             batch_size=settings.embedding_batch_size,
+            max_tokens=settings.embedding_max_tokens,
         )
         self.jobtech = JobTechClient(settings.jobtech_api_url, settings.jobtech_timeout_seconds)
 
@@ -63,6 +66,10 @@ class JobStore:
     @property
     def is_seeding(self) -> bool:
         return self._seeding.is_set()
+
+    @property
+    def is_syncing(self) -> bool:
+        return self._syncing.is_set()
 
     def count(self) -> int:
         return self.collection.count()
@@ -83,12 +90,11 @@ class JobStore:
         known_records = [record for record in unique if record.id in existing_ids]
 
         if new_records:
-            documents = [record.document for record in new_records]
             self.collection.add(
                 ids=[record.id for record in new_records],
-                documents=documents,
+                documents=[record.document for record in new_records],
                 metadatas=[record.metadata for record in new_records],
-                embeddings=self.embedder.embed_documents(documents),
+                embeddings=self.embedder.embed_documents([record.embed_text for record in new_records]),
             )
 
         if known_records:
@@ -116,12 +122,16 @@ class JobStore:
 
     def sync_many(self, queries: Sequence[str], limit: int) -> int:
         total = 0
-        for query in queries:
-            try:
-                total += self.sync_jobs(query, limit=limit)
-            except Exception:  # one bad query must not stop the rest
-                logger.exception("Error syncing query '%s'", query)
-        self.prune_expired()
+        self._syncing.set()
+        try:
+            for query in queries:
+                try:
+                    total += self.sync_jobs(query, limit=limit)
+                except Exception:  # one bad query must not stop the rest
+                    logger.exception("Error syncing query '%s'", query)
+            self.prune_expired()
+        finally:
+            self._syncing.clear()
         return total
 
     def prune_expired(self) -> None:
@@ -178,7 +188,8 @@ class JobStore:
         jobs that fit the whole profile beat jobs that match a single line.
         """
         limit = self._settings.max_long_text_chars if long_text else self._settings.max_query_chars
-        clean_query = query_text.strip()[:limit]
+        # A typed term gets Swedish spelling/equivalents added; a CV only gets whitespace clean-up.
+        clean_query = clean_text(query_text)[:limit] if long_text else normalize_query(query_text[:limit])
         total = self.count()
         if not clean_query or total == 0:
             return []
@@ -192,7 +203,7 @@ class JobStore:
         fetch = min(total, 500 if location else max(wanted * 3, 30))
 
         queries = self._chunk_text(clean_query) if long_text else [clean_query]
-        vectors = self.embedder.embed_documents(queries)
+        vectors = self.embedder.embed_queries(queries)
 
         result = self.collection.query(
             query_embeddings=vectors,

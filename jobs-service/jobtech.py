@@ -12,13 +12,37 @@ logger = logging.getLogger("JobTech")
 
 MAX_DOCUMENT_DESCRIPTION_CHARS = 2000
 MAX_SNIPPET_CHARS = 300
+# The embedding model reads ~256 tokens (~1000 characters of Swedish): the part of the
+# ad that identifies the job. Anything beyond is cut off by the tokenizer anyway.
+MAX_EMBED_DESCRIPTION_CHARS = 1200
 
 
 @dataclass(frozen=True)
 class JobRecord:
     id: str
-    document: str
+    document: str  # stored and shown to users / reused as the job description
+    embed_text: str  # what is actually embedded: title-led, no company/location noise
     metadata: Dict[str, Any]
+
+
+def _label(job: Dict[str, Any], key: str) -> str:
+    value = job.get(key)
+    return str(value.get("label") or "").strip() if isinstance(value, dict) else ""
+
+
+def build_embed_text(headline: str, occupation: str, occupation_group: str, description: str) -> str:
+    """Title and occupation first, then the start of the ad, with whitespace collapsed.
+
+    Company and location are deliberately left out: they dilute the few tokens the model reads,
+    and location is already a metadata filter.
+    """
+    labels = []
+    for label in (occupation, occupation_group):
+        if label and label.casefold() != headline.casefold() and label not in labels:
+            labels.append(label)
+
+    body = " ".join(description.split())[:MAX_EMBED_DESCRIPTION_CHARS]
+    return ". ".join(part for part in [headline, *labels, body] if part)
 
 
 def _parse_timestamp(value: Optional[str], fallback: datetime) -> datetime:
@@ -94,6 +118,9 @@ def normalize_job(job: Dict[str, Any], query_term: str) -> Optional[JobRecord]:
         ]
     )
 
+    occupation = _label(job, "occupation")
+    occupation_group = _label(job, "occupation_group")
+
     now = datetime.now(timezone.utc)
     published = _parse_timestamp(job.get("publication_date"), now)
     record_id = f"af_{raw_id}"
@@ -103,6 +130,9 @@ def normalize_job(job: Dict[str, Any], query_term: str) -> Optional[JobRecord]:
         "title": headline,
         "company": company,
         "location": location,
+        "occupation": occupation,
+        "occupation_group": occupation_group,
+        "occupation_field": _label(job, "occupation_field"),
         "url": url,
         "source": "arbetsformedlingen",
         "query": query_term,
@@ -115,4 +145,5 @@ def normalize_job(job: Dict[str, Any], query_term: str) -> Optional[JobRecord]:
         "published_ts": int(published.timestamp()),
     }
 
-    return JobRecord(id=record_id, document=document, metadata=metadata)
+    embed_text = build_embed_text(headline, occupation, occupation_group, description)
+    return JobRecord(id=record_id, document=document, embed_text=embed_text, metadata=metadata)

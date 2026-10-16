@@ -63,14 +63,16 @@ To enable it, put `TAVILY_API_KEY=tvly-...` in a `.env` file next to `docker-com
 
 ## Job search service (vector database)
 
-`jobs-service/` is a small FastAPI app that indexes Arbetsförmedlingen ads in an embedded Chroma database. Embeddings come from the int8-quantized ONNX export of `paraphrase-multilingual-MiniLM-L12-v2` (Swedish + English), run on ONNX Runtime with SentencePiece tokenisation. The vectors are the same ones sentence-transformers produces, but the image contains **no PyTorch/CUDA**. The model is baked into the image (`download_model.py`), so containers start offline in a few seconds and the service uses about 0.5 GB of RAM.
+`jobs-service/` is a small FastAPI app that indexes Arbetsförmedlingen ads in an embedded Chroma database. Embeddings come from the int8-quantized ONNX export of `multilingual-e5-small` (Swedish + English), run on ONNX Runtime with SentencePiece tokenisation. The image contains **no PyTorch/CUDA**. Ads are embedded as title + occupation + the start of the ad (company and location are left out), and typed search terms are normalised first (Swedish spelling restored, English titles get their Swedish equivalent appended, e.g. `waiter` -> `waiter servitör`). The model is baked into the image (`download_model.py`), so containers start offline in a few seconds and the service uses about 0.5 GB of RAM.
 
 - The index fills itself on first start (about a minute). `GET /health` reports `seeding: true` while that runs, and searches return HTTP 503 until it finishes.
-- **Sync Ads** in Job Finder fetches fresh listings. Only ads that are new get embedded; ads already in the index just get their timestamp refreshed.
-- A long CV is split into overlapping chunks and each chunk is searched, because the embedding model only reads about 128 tokens per input. A job ranks higher when it fits the whole profile, not just one line.
+- **Sync Ads** in Job Finder refreshes every sector in the background (it takes a few minutes; the counter updates while it runs). Only ads that are new get embedded; ads already in the index just get their timestamp refreshed.
+- A long CV is split into overlapping chunks and each chunk is searched, because the embedding model only reads about 256 tokens per input. A job ranks higher when it fits the whole profile, not just one line.
 - Ads older than `JOB_TTL_DAYS` are deleted after each sync, so the index stays small.
 - Compose caps the service at 2 CPUs / 768 MB RAM and MongoDB's cache at 256 MB.
 - To run it outside Docker: `pip install -r requirements.txt`, `python download_model.py`, then `uvicorn api:app --port 8001`.
+
+Changing the embedding model uses a new collection (`swedish_job_listings_v3`) that is re-embedded on first start; the old `_v2` collection stays in the volume unused.
 
 Upgrading from the PyTorch version: the index moved to a new volume (`jobs_vector_data`) and is rebuilt automatically. The old volume can be removed with `docker volume rm arbeteflow_chroma_jobs_data`.
 

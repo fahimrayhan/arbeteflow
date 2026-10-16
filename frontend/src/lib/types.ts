@@ -94,6 +94,7 @@ export interface JobMarketHealth {
   available: boolean;
   total_jobs_indexed?: number;
   seeding?: boolean;
+  syncing?: boolean;
   model?: string;
   error?: string;
 }

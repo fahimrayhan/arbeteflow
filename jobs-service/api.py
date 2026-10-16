@@ -135,6 +135,7 @@ def health() -> Dict[str, Any]:
         "database": "connected",
         "total_jobs_indexed": store.count(),
         "seeding": store.is_seeding,
+        "syncing": store.is_syncing,
         "model": store.model_name,
     }
 
@@ -160,10 +161,18 @@ async def trigger_sync(request: SyncRequest, background_tasks: BackgroundTasks) 
     if store is None:
         raise HTTPException(status_code=503, detail="The job search service is starting up.")
 
-    queries = request.queries or DEFAULT_SEED_QUERIES[:5]
+    if store.is_syncing or store.is_seeding:
+        return {
+            "status": "already_running",
+            "queries": [],
+            "message": "A sync is already running. New listings appear as they are indexed.",
+        }
+
+    # No terms given (the "Sync Ads" button): refresh every sector, not just the first few IT terms.
+    queries = request.queries or list(DEFAULT_SEED_QUERIES)
     background_tasks.add_task(store.sync_many, queries, request.limit)
     return {
         "status": "sync_started",
         "queries": queries,
-        "message": f"Sync queued for {len(queries)} search terms.",
+        "message": f"Sync started for {len(queries)} search terms. New listings appear as they are indexed.",
     }

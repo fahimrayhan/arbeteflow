@@ -4,7 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    MODEL_DIR=/opt/models/minilm \
+    MODEL_DIR=/opt/models/e5-small \
     CHROMA_PATH=/data/chroma \
     # Keep ONNX Runtime and BLAS from spawning one thread per host core.
     OMP_NUM_THREADS=2 \
@@ -17,7 +17,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Bake the int8 ONNX model (~240 MB) into the image so containers start offline and fast.
+# Bake the int8 ONNX model (~120 MB) into the image so containers start offline and fast.
 COPY download_model.py .
 RUN HF_HOME=/tmp/hf python download_model.py && rm -rf /tmp/hf
 
