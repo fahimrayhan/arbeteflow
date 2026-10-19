@@ -36,7 +36,7 @@ Open **Settings** in the app and select a provider, base URL, model, and (where 
 
 For **Ollama cloud**, choose *Ollama (local or cloud)*, set the base URL to `https://ollama.com`, pick a cloud model, and enter your Ollama API key.
 
-When the API runs in Docker, use `http://host.docker.internal:8000` for a vLLM instance on the host and `http://host.docker.internal:11434` for host Ollama. The Compose file configures the host gateway for this purpose. OpenAI and Anthropic use their respective API base URLs.
+When the API runs in Docker, use `http://host.docker.internal:8000` for a vLLM instance on the host and `http://host.docker.internal:11434` for host Ollama. For another OpenAI-compatible local server such as LM Studio, use `http://host.docker.internal:1234` as the OpenAI provider base URL (without `/v1`). Do not use `localhost` in these URLs: inside the API container, it refers to the container itself. The Compose file configures the host gateway for this purpose. OpenAI and Anthropic use their respective API base URLs.
 
 Optional Compose variables:
 
@@ -114,6 +114,8 @@ npm run dev
 For Job Finder outside Compose, set `JOBS_SERVICE_URL` to the reachable Python vector service URL (`http://127.0.0.1:8001` when the Compose service is running).
 
 ## Data and privacy
+
+See the in-app **Responsible AI**, **Disclaimer**, and **FAQ** sections for the data-flow table, model limitations, fairness mitigations, deletion guidance, and blocked-input explanations. The project does not collect telemetry or analytics. See [SECURITY.md](./SECURITY.md) before handling provider keys or reporting an issue.
 
 Resumes, chat sessions, interviews, applications, and model configuration are stored in MongoDB. Job listing embeddings live in the Python service's Chroma volume. PDF export supports Latin text (including Swedish letters); other scripts and emoji are replaced with "?" in the PDF only. AI prompts and resume content are sent from the API to the provider configured in Settings. Back up the Docker volumes to preserve application data.
 

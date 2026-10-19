@@ -8,6 +8,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { streamLlmResponse } from '../services/llm.js';
 import { buildCoachSystemPrompt } from '../services/prompts.js';
 import { COACH_MODES, type ChatSessionDocument } from '../types.js';
+import { enforceInputGuards, lintGeneratedText, validateCareerOutput } from '../services/guardrails.js';
 
 /*
   Keep recent conversation history only. This prevents a small-context
@@ -82,6 +83,7 @@ chatRouter.get('/sessions/:sessionId', asyncHandler(async (req, res) => {
 
 chatRouter.post('/sessions/:sessionId/messages', asyncHandler(async (req, res) => {
   const { content } = sendMessageSchema.parse(req.body);
+  const guarded = enforceInputGuards('coach', { content });
   const userId = userIdOf(req);
   const sessionId = parseObjectId(req.params.sessionId, 'chat session ID');
   const { chatSessions, resumes, jobs } = await collections();
@@ -92,7 +94,7 @@ chatRouter.post('/sessions/:sessionId/messages', asyncHandler(async (req, res) =
     throw notFound('Chat session not found.');
   }
 
-  const userMessage = createMessage('user', content);
+  const userMessage = createMessage('user', guarded.values.content!);
 
   await chatSessions.updateOne(
     { _id: sessionId, userId },
@@ -111,6 +113,7 @@ chatRouter.post('/sessions/:sessionId/messages', asyncHandler(async (req, res) =
   });
 
   await runSseStream(req, res, async (stream) => {
+    stream.send('guard', guarded.report);
     let fullResponse = '';
 
     await streamLlmResponse({
@@ -121,6 +124,11 @@ chatRouter.post('/sessions/:sessionId/messages', asyncHandler(async (req, res) =
       onToken: (token) => {
         fullResponse += token;
         stream.send('token', { token });
+      },
+      onComplete: (text) => stream.send('guard', { ...guarded.report, outputFlags: lintGeneratedText(text, userMessage.content) }),
+      outputGuard: {
+        validate: validateCareerOutput,
+        fallback: 'I’m ArbetsFlow. I can help with resumes, job applications, career planning, and interview preparation.',
       },
     });
 

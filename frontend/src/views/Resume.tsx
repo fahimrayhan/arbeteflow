@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { ChevronDown, FileText, RotateCcw, Save, Upload, Wand2 } from 'lucide-react';
 import { InlineNotice } from '../components/ui/Alert';
 import { GeneratedDocumentPanel } from '../components/ui/GeneratedDocumentPanel';
@@ -275,6 +275,29 @@ export default function Resume() {
     setNotice('Sample resume loaded. Press Save to store it locally.');
   }
 
+  useEffect(() => {
+    function handleKeyboardShortcuts(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setShowIndustry(false);
+        return;
+      }
+
+      const modifier = event.metaKey || event.ctrlKey;
+      if (!modifier || event.altKey) return;
+
+      if (event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        if (input.trim() && !isBusy) void handleSave();
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        if (input.trim() && !isBusy) void handleEnhance();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyboardShortcuts);
+    return () => window.removeEventListener('keydown', handleKeyboardShortcuts);
+  }, [input, isBusy, handleSave, handleEnhance]);
+
   const wordCount = input.trim() ? input.trim().split(/\s+/).length : 0;
 
   return (
@@ -285,6 +308,10 @@ export default function Resume() {
           title="Resume Enhancer"
           description="Upload a PDF or paste your resume, then tailor it to a role."
         />
+        <p className="text-xs" style={mutedText}>
+          Shortcuts: <kbd>Cmd/Ctrl+S</kbd> save · <kbd>Cmd/Ctrl+Enter</kbd> enhance ·{' '}
+          <kbd>Esc</kbd> close menus
+        </p>
 
         <div className="flex flex-wrap items-center gap-3">
           <input
@@ -483,6 +510,10 @@ export default function Resume() {
           onCopy={() => void handleCopy()}
           onDownloadTxt={() => downloadTextFile(enhanced, `${exportBaseName(targetRole)}.txt`)}
           onExportPdf={() => void handleExportPdf()}
+          onTextChange={(text) => {
+            setEnhanced(text);
+            setNotice('Edited enhanced resume. Save to keep your changes.');
+          }}
         />
       </div>
     </div>

@@ -13,6 +13,7 @@ import JobFinder from './views/JobFinder';
 import Resume from './views/Resume';
 import SettingsView from './views/Settings';
 import Tracker from './views/Tracker';
+import TrustView, { FaqView } from './views/Trust';
 
 const VIEWS: Record<View, ComponentType> = {
   resume: Resume,
@@ -22,6 +23,8 @@ const VIEWS: Record<View, ComponentType> = {
   finder: JobFinder,
   tracker: Tracker,
   settings: SettingsView,
+  learn: TrustView,
+  faq: FaqView,
 };
 
 export default function App() {
@@ -82,7 +85,7 @@ export default function App() {
 
         <main className="min-w-0 flex-1">
           <MobileHeader
-            title={activeNavigationItem?.label ?? 'ArbeteFlow'}
+            title={activeNavigationItem?.label ?? 'ArbetsFlow'}
             theme={theme}
             onOpenMenu={() => setSidebarOpen(true)}
             onToggleTheme={toggleTheme}

@@ -161,7 +161,7 @@ export default function Chat() {
       <div className="flex flex-col gap-5 mb-6">
         <PageHeader
           eyebrow="AI CAREER COACH"
-          title="CareerAI Coach"
+          title="ArbetsFlow Coach"
           description="Resume feedback, career guidance, and job-post analysis using your locally hosted model."
         />
 
@@ -248,7 +248,7 @@ export default function Chat() {
             <EmptyState
               icon={MessageSquare}
               title={`Start a conversation with your ${activeMode.label}`}
-              description="CareerAI stays focused on resumes, job searching, career strategy, and interview preparation."
+              description="ArbetsFlow stays focused on resumes, job searching, career strategy, and interview preparation."
               className="h-full min-h-[320px] flex flex-col items-center justify-center text-center px-6"
               descriptionClassName="mt-2 text-sm max-w-md"
             >

@@ -8,6 +8,7 @@ import {
   buildResumeEnhanceUserPrompt,
   RESUME_ENHANCE_SYSTEM_PROMPT,
 } from '../services/prompts.js';
+import { enforceInputGuards, lintGeneratedText } from '../services/guardrails.js';
 
 const resumeEnhanceSchema = z.object({
   resumeText: z.string().trim().min(1).max(50_000),
@@ -19,14 +20,17 @@ export const resumeEnhanceRouter = Router();
 
 resumeEnhanceRouter.post('/', requireAuth, asyncHandler(async (req, res) => {
   const input = resumeEnhanceSchema.parse(req.body);
+  const guarded = enforceInputGuards('resume', input);
 
   await runSseStream(req, res, async (stream) => {
+    stream.send('guard', { ...guarded.report, providerScope: 'configured provider' });
     await streamLlmResponse({
       systemPrompt: RESUME_ENHANCE_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: buildResumeEnhanceUserPrompt(input) }],
+      messages: [{ role: 'user', content: buildResumeEnhanceUserPrompt(guarded.values as typeof input) }],
       maxTokens: 700,
       signal: stream.signal,
       onToken: (token) => stream.send('token', { token }),
+      onComplete: (text) => stream.send('guard', { ...guarded.report, outputFlags: lintGeneratedText(text, input.resumeText) }),
     });
 
     stream.send('done', {});

@@ -17,6 +17,8 @@ interface GeneratedDocumentPanelProps {
   onCopy: () => void;
   onDownloadTxt: () => void;
   onExportPdf: () => void;
+  /** Allows the caller to edit generated text before saving or exporting. */
+  onTextChange?: (text: string) => void;
   /** Optional content under the output box (e.g. research sources). */
   footer?: ReactNode;
 }
@@ -34,14 +36,19 @@ export function GeneratedDocumentPanel({
   onCopy,
   onDownloadTxt,
   onExportPdf,
+  onTextChange,
   footer,
 }: GeneratedDocumentPanelProps) {
   const outputRef = useRef<HTMLDivElement>(null);
+  const editableRef = useRef<HTMLTextAreaElement>(null);
 
   // Follow the text while it streams in.
   useEffect(() => {
     if (streaming && outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
+    }
+    if (streaming && editableRef.current) {
+      editableRef.current.scrollTop = editableRef.current.scrollHeight;
     }
   }, [text, streaming]);
 
@@ -110,21 +117,39 @@ export function GeneratedDocumentPanel({
         )}
 
         {text ? (
-          <pre className="m-0 whitespace-pre-wrap font-sans" style={foregroundText}>
-            {text}
-            {streaming && (
-              <span
-                className="inline-block w-2 h-4 ml-1 align-middle animate-pulse"
-                style={{ background: 'var(--color-primary)' }}
-              />
-            )}
-          </pre>
+          onTextChange ? (
+            <textarea
+              value={text}
+              ref={editableRef}
+              onChange={(event) => onTextChange(event.target.value)}
+              readOnly={streaming}
+              aria-label={`${title} editable text`}
+              className="w-full min-h-[420px] resize-none bg-transparent outline-none font-sans"
+              style={foregroundText}
+            />
+          ) : (
+            <pre className="m-0 whitespace-pre-wrap font-sans" style={foregroundText}>
+              {text}
+              {streaming && (
+                <span
+                  className="inline-block w-2 h-4 ml-1 align-middle animate-pulse"
+                  style={{ background: 'var(--color-primary)' }}
+                />
+              )}
+            </pre>
+          )
         ) : !streaming && !error ? (
           <EmptyState icon={Sparkles} title={emptyTitle} description={emptyDescription} />
         ) : null}
       </div>
 
       {footer}
+      {text && (
+        <p className="text-xs leading-5 mt-3" style={mutedText}>
+          AI-generated draft using your configured model. Review every factual claim, metric,
+          qualification, and company detail before using it.
+        </p>
+      )}
     </section>
   );
 }

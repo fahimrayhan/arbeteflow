@@ -77,11 +77,16 @@ const PROVIDERS: ProviderInfo[] = [
   {
     id: 'openai',
     label: 'OpenAI',
-    description: 'OpenAI API through your local backend',
+    description: 'OpenAI or another OpenAI-compatible server',
     defaultBaseUrl: 'https://api.openai.com',
     defaultModel: 'gpt-4o-mini',
     requiresApiKey: true,
-    baseUrlHint: <>The OpenAI API address. Do not append <code>/v1</code>.</>,
+    baseUrlHint: (
+      <>
+        The OpenAI API address. Do not append <code>/v1</code>. For a local server in Docker
+        (such as LM Studio), use <code>http://host.docker.internal:1234</code>.
+      </>
+    ),
     modelHint: <>A model ID from your OpenAI account, e.g. <code>gpt-4o-mini</code>.</>,
     apiKeyPlaceholder: 'Enter the provider API key',
   },

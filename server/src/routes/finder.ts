@@ -5,6 +5,7 @@ import { collections } from "../db.js";
 import { asyncHandler, badRequest, userIdOf } from "../lib/http.js";
 import { requireAuth } from "../middleware/auth.js";
 import { callJobsService } from "../services/jobsService.js";
+import { anonymizeResumeForMatching, enforceInputGuards } from "../services/guardrails.js";
 
 const filterSchema = z.object({
   limit: z.number().int().min(1).max(50).optional().default(10),
@@ -96,10 +97,11 @@ finderRouter.post(
         "No resume found. Please save a primary resume in the Resume tab or upload one first.",
       );
     }
+    const guarded = enforceInputGuards("recommendation", { cv: cvText });
 
     res.json(
       await callJobsService("/jobs/recommend", {
-        body: { cv: cvText, ...toServiceFilters(input) },
+        body: { cv: anonymizeResumeForMatching(guarded.values.cv!), ...toServiceFilters(input) },
         timeoutMs: 15_000,
       }),
     );

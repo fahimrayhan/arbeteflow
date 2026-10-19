@@ -15,9 +15,8 @@ interface SidebarProps {
 export function Sidebar({ view, open, theme, onNavigate, onToggleTheme }: SidebarProps) {
   return (
     <aside
-      className={`fixed lg:sticky top-0 left-0 z-40 h-screen w-[272px] shrink-0 transition-transform duration-200 lg:translate-x-0 ${
-        open ? 'translate-x-0' : '-translate-x-full'
-      }`}
+      className={`fixed lg:sticky top-0 left-0 z-40 h-screen w-[272px] shrink-0 transition-transform duration-200 lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'
+        }`}
       style={{
         background: 'var(--color-card)',
         borderRight: '1px solid var(--color-border)',
@@ -38,7 +37,7 @@ export function Sidebar({ view, open, theme, onNavigate, onToggleTheme }: Sideba
 
           <div>
             <div className="font-bold tracking-tight" style={foregroundText}>
-              ArbeteFlow
+              ArbetsFlow
             </div>
 
             <div className="text-xs" style={mutedText}>

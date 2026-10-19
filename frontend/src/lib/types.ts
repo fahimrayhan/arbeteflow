@@ -5,7 +5,9 @@ export type View =
   | 'interview'
   | 'finder'
   | 'tracker'
-  | 'settings';
+  | 'settings'
+  | 'learn'
+  | 'faq';
 
 export type ChatMode = 'resume' | 'career' | 'jobcritic';
 

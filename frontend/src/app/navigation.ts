@@ -6,6 +6,8 @@ import {
   MessageSquare,
   Search,
   Settings,
+  BookOpen,
+  CircleHelp,
   type LucideIcon,
 } from 'lucide-react';
 import type { View } from '../lib/types';
@@ -59,5 +61,17 @@ export const NAV_ITEMS: NavigationItem[] = [
     label: 'Settings',
     icon: Settings,
     description: 'Local app preferences',
+  },
+  {
+    id: 'learn',
+    label: 'Responsible AI',
+    icon: BookOpen,
+    description: 'How it works, privacy, and fairness',
+  },
+  {
+    id: 'faq',
+    label: 'FAQ',
+    icon: CircleHelp,
+    description: 'Answers about data and AI limits',
   },
 ];

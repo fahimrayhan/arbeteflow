@@ -81,3 +81,9 @@ jobs-service/models/
 
 # Generated encryption key
 .data/
+
+# Fixes
+Fix.md
+SECURITY.md
+Report.md
+docs/*

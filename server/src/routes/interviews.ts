@@ -14,6 +14,7 @@ import {
   type InterviewSessionDocument,
   type ResumeDocument,
 } from "../types.js";
+import { enforceInputGuards, lintGeneratedText, validateCareerOutput } from "../services/guardrails.js";
 
 /** Bounds the prompt size for long interviews while keeping enough history for feedback. */
 const CONTEXT_MESSAGE_LIMIT = 30;
@@ -52,13 +53,18 @@ interviewRouter.use(requireAuth);
 
 interviewRouter.post("/", asyncHandler(async (req, res) => {
   const input = createInterviewSchema.parse(req.body);
+  const guarded = enforceInputGuards("interview", {
+    role: input.role,
+    company: input.company,
+    jobDescription: input.jobDescription,
+  });
   const now = new Date();
 
   const session: InterviewSessionDocument = {
     userId: userIdOf(req),
-    role: input.role,
-    company: input.company || undefined,
-    jobDescription: input.jobDescription || undefined,
+    role: guarded.values.role!,
+    company: guarded.values.company || undefined,
+    jobDescription: guarded.values.jobDescription || undefined,
     interviewType: input.interviewType,
     difficulty: input.difficulty,
     resumeId: input.resumeId || undefined,
@@ -105,6 +111,7 @@ interviewRouter.get("/:interviewId", asyncHandler(async (req, res) => {
 
 interviewRouter.post("/:interviewId/messages", asyncHandler(async (req, res) => {
   const { content } = sendMessageSchema.parse(req.body);
+  const guarded = enforceInputGuards("interview", { content });
   const userId = userIdOf(req);
   const interviewId = parseObjectId(req.params.interviewId, "interview ID");
   const { interviewSessions, resumes } = await collections();
@@ -122,7 +129,7 @@ interviewRouter.post("/:interviewId/messages", asyncHandler(async (req, res) => 
     );
   }
 
-  const userMessage = createMessage("user", content);
+  const userMessage = createMessage("user", guarded.values.content!);
 
   await interviewSessions.updateOne(
     { _id: interviewId, userId },
@@ -146,6 +153,7 @@ interviewRouter.post("/:interviewId/messages", asyncHandler(async (req, res) => 
   });
 
   await runSseStream(req, res, async (stream) => {
+    stream.send("guard", guarded.report);
     let fullResponse = "";
 
     await streamLlmResponse({
@@ -155,6 +163,11 @@ interviewRouter.post("/:interviewId/messages", asyncHandler(async (req, res) => 
       onToken: (token) => {
         fullResponse += token;
         stream.send("token", { token });
+      },
+      onComplete: (text) => stream.send("guard", { ...guarded.report, outputFlags: lintGeneratedText(text, interview.jobDescription ?? "") }),
+      outputGuard: {
+        validate: validateCareerOutput,
+        fallback: "Let's keep this practice focused on the target role and workplace situations. Please answer the interview question or ask for career-related feedback.",
       },
     });
 

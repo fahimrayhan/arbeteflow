@@ -170,6 +170,11 @@ export async function streamLlmResponse(input: {
   messages: ChatMessage[];
   maxTokens?: number;
   onToken: StreamTokenHandler;
+  onComplete?: (text: string) => Promise<void> | void;
+  outputGuard?: {
+    validate: (text: string) => string | undefined;
+    fallback: string;
+  };
   /** Abort when the client goes away so the model stops generating. */
   signal?: AbortSignal;
 }): Promise<void> {
@@ -222,12 +227,16 @@ export async function streamLlmResponse(input: {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let fullResponse = "";
 
   const emit = async (payloads: string[]) => {
     for (const payload of payloads) {
       const token = request.extractToken(parseChunk(payload));
       if (token) {
-        await input.onToken(token);
+        fullResponse += token;
+        if (!input.outputGuard) {
+          await input.onToken(token);
+        }
       }
     }
   };
@@ -248,6 +257,9 @@ export async function streamLlmResponse(input: {
 
     buffer += decoder.decode();
     await emit(extractPayloads(buffer, request.framing, true).payloads);
+    const outputProblem = input.outputGuard?.validate(fullResponse);
+    await input.onToken(outputProblem ? input.outputGuard!.fallback : fullResponse);
+    await input.onComplete?.(fullResponse);
   } catch (error) {
     // Close the upstream connection so the model stops generating.
     await reader.cancel().catch(() => undefined);
