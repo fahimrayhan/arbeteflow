@@ -1,0 +1,15 @@
+services:
+  mongodb:
+    image: mongo:8
+    container_name: jobfinder-mongodb
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: jobfinder
+      GLIBC_TUNABLES: "glibc.pthread.rseq=1"
+    volumes:
+      - jobfinder_mongodb_data:/data/db
+
+volumes:
+  jobfinder_mongodb_data:
