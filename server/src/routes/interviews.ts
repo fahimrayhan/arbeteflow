@@ -1,51 +1,33 @@
-import { ObjectId } from "mongodb";
+import { ObjectId, type Filter } from "mongodb";
 import { Router } from "express";
 import { z } from "zod";
-import { getDb } from "../db.js";
+import { collections } from "../db.js";
+import { asyncHandler, HttpError, notFound, parseObjectId, userIdOf } from "../lib/http.js";
+import { createMessage, sendMessageSchema, serializeMessage } from "../lib/messages.js";
+import { runSseStream } from "../lib/sse.js";
 import { requireAuth } from "../middleware/auth.js";
 import { streamLlmResponse } from "../services/llm.js";
 import { buildInterviewSystemPrompt } from "../services/prompts.js";
-import type {
-  InterviewDifficulty,
-  InterviewSessionDocument,
-  InterviewType,
-  ResumeDocument,
-  StoredMessage,
+import {
+  INTERVIEW_DIFFICULTIES,
+  INTERVIEW_TYPES,
+  type InterviewSessionDocument,
+  type ResumeDocument,
 } from "../types.js";
 
-const interviewTypeSchema = z.enum([
-  "behavioral",
-  "technical",
-  "mixed",
-  "case",
-]);
+/** Bounds the prompt size for long interviews while keeping enough history for feedback. */
+const CONTEXT_MESSAGE_LIMIT = 30;
 
-const difficultySchema = z.enum(["junior", "mid", "senior"]);
+const END_INTERVIEW_PATTERN = /\b(end|finish|stop)\s+(the\s+)?interview\b/i;
 
 const createInterviewSchema = z.object({
   role: z.string().trim().min(2).max(200),
   company: z.string().trim().max(200).optional(),
   jobDescription: z.string().trim().max(50_000).optional(),
-  interviewType: interviewTypeSchema.default("mixed"),
-  difficulty: difficultySchema.default("mid"),
-  resumeId: z.string().trim().optional(),
+  interviewType: z.enum(INTERVIEW_TYPES).default("mixed"),
+  difficulty: z.enum(INTERVIEW_DIFFICULTIES).default("mid"),
+  resumeId: z.string().trim().max(64).optional(),
 });
-
-const sendMessageSchema = z.object({
-  content: z.string().trim().min(1).max(12_000),
-});
-
-function messageId(): string {
-  return crypto.randomUUID();
-}
-
-function parseObjectId(value: string, label: string): ObjectId {
-  if (!ObjectId.isValid(value)) {
-    throw new Error(`Invalid ${label}.`);
-  }
-
-  return new ObjectId(value);
-}
 
 function serializeInterview(session: InterviewSessionDocument) {
   return {
@@ -57,227 +39,143 @@ function serializeInterview(session: InterviewSessionDocument) {
     difficulty: session.difficulty,
     resumeId: session.resumeId,
     status: session.status,
-    messages: session.messages.map((message) => ({
-      id: message.id,
-      role: message.role,
-      content: message.content,
-      createdAt: message.createdAt.toISOString(),
-    })),
+    messages: session.messages.map(serializeMessage),
     feedback: session.feedback,
     createdAt: session.createdAt.toISOString(),
     updatedAt: session.updatedAt.toISOString(),
   };
 }
 
-function writeSse(res: import("express").Response, event: string, data: unknown) {
-  res.write(`event: ${event}\n`);
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
-}
-
 export const interviewRouter = Router();
 
-interviewRouter.post("/", requireAuth, async (req, res, next) => {
-  try {
-    const input = createInterviewSchema.parse(req.body);
-    const now = new Date();
+interviewRouter.use(requireAuth);
 
-    const session: InterviewSessionDocument = {
-      userId: req.user!.id,
-      role: input.role,
-      company: input.company || undefined,
-      jobDescription: input.jobDescription || undefined,
-      interviewType: input.interviewType as InterviewType,
-      difficulty: input.difficulty as InterviewDifficulty,
-      resumeId: input.resumeId || undefined,
-      status: "active",
-      messages: [],
-      createdAt: now,
-      updatedAt: now,
-    };
+interviewRouter.post("/", asyncHandler(async (req, res) => {
+  const input = createInterviewSchema.parse(req.body);
+  const now = new Date();
 
-    const db = await getDb();
-    const result = await db
-      .collection<InterviewSessionDocument>("interviewSessions")
-      .insertOne(session);
+  const session: InterviewSessionDocument = {
+    userId: userIdOf(req),
+    role: input.role,
+    company: input.company || undefined,
+    jobDescription: input.jobDescription || undefined,
+    interviewType: input.interviewType,
+    difficulty: input.difficulty,
+    resumeId: input.resumeId || undefined,
+    status: "active",
+    messages: [],
+    createdAt: now,
+    updatedAt: now,
+  };
 
-    res.status(201).json({
-      interview: serializeInterview({
-        ...session,
-        _id: result.insertedId,
-      }),
+  const { interviewSessions } = await collections();
+  const result = await interviewSessions.insertOne(session);
+
+  res.status(201).json({
+    interview: serializeInterview({ ...session, _id: result.insertedId }),
+  });
+}));
+
+interviewRouter.get("/", asyncHandler(async (req, res) => {
+  const { interviewSessions } = await collections();
+
+  const interviews = await interviewSessions
+    .find({ userId: userIdOf(req) })
+    .sort({ updatedAt: -1 })
+    .limit(50)
+    .toArray();
+
+  res.json({ interviews: interviews.map(serializeInterview) });
+}));
+
+interviewRouter.get("/:interviewId", asyncHandler(async (req, res) => {
+  const { interviewSessions } = await collections();
+
+  const interview = await interviewSessions.findOne({
+    _id: parseObjectId(req.params.interviewId, "interview ID"),
+    userId: userIdOf(req),
+  });
+
+  if (!interview) {
+    throw notFound("Interview not found.");
+  }
+
+  res.json({ interview: serializeInterview(interview) });
+}));
+
+interviewRouter.post("/:interviewId/messages", asyncHandler(async (req, res) => {
+  const { content } = sendMessageSchema.parse(req.body);
+  const userId = userIdOf(req);
+  const interviewId = parseObjectId(req.params.interviewId, "interview ID");
+  const { interviewSessions, resumes } = await collections();
+
+  const interview = await interviewSessions.findOne({ _id: interviewId, userId });
+
+  if (!interview) {
+    throw notFound("Interview not found.");
+  }
+
+  if (interview.status === "completed") {
+    throw new HttpError(
+      409,
+      "This interview has already ended. Start a new session to continue practicing.",
+    );
+  }
+
+  const userMessage = createMessage("user", content);
+
+  await interviewSessions.updateOne(
+    { _id: interviewId, userId },
+    { $push: { messages: userMessage }, $set: { updatedAt: new Date() } },
+  );
+
+  const resumeFilter: Filter<ResumeDocument> =
+    interview.resumeId && ObjectId.isValid(interview.resumeId)
+      ? { _id: new ObjectId(interview.resumeId), userId }
+      : { userId, isPrimary: true };
+
+  const resume = await resumes.findOne(resumeFilter);
+
+  const systemPrompt = buildInterviewSystemPrompt({
+    role: interview.role,
+    company: interview.company,
+    jobDescription: interview.jobDescription,
+    resumeText: resume?.rawText,
+    interviewType: interview.interviewType,
+    difficulty: interview.difficulty,
+  });
+
+  await runSseStream(req, res, async (stream) => {
+    let fullResponse = "";
+
+    await streamLlmResponse({
+      systemPrompt,
+      messages: [...interview.messages, userMessage].slice(-CONTEXT_MESSAGE_LIMIT),
+      signal: stream.signal,
+      onToken: (token) => {
+        fullResponse += token;
+        stream.send("token", { token });
+      },
     });
-  } catch (error) {
-    next(error);
-  }
-});
 
-interviewRouter.get("/", requireAuth, async (req, res, next) => {
-  try {
-    const db = await getDb();
+    const assistantMessage = createMessage("assistant", fullResponse.trim());
+    const endedByUser = END_INTERVIEW_PATTERN.test(content);
 
-    const interviews = await db
-      .collection<InterviewSessionDocument>("interviewSessions")
-      .find({ userId: req.user!.id })
-      .sort({ updatedAt: -1 })
-      .limit(50)
-      .toArray();
-
-    res.json({
-      interviews: interviews.map(serializeInterview),
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-interviewRouter.get("/:interviewId", requireAuth, async (req, res, next) => {
-  try {
-    const db = await getDb();
-
-    const interview = await db
-      .collection<InterviewSessionDocument>("interviewSessions")
-      .findOne({
-        _id: parseObjectId(req.params.interviewId, "interview ID"),
-        userId: req.user!.id,
-      });
-
-    if (!interview) {
-      res.status(404).json({ error: "Interview not found." });
-      return;
-    }
-
-    res.json({ interview: serializeInterview(interview) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-interviewRouter.post(
-  "/:interviewId/messages",
-  requireAuth,
-  async (req, res, next) => {
-    try {
-      const { content } = sendMessageSchema.parse(req.body);
-      const db = await getDb();
-
-      const interview = await db
-        .collection<InterviewSessionDocument>("interviewSessions")
-        .findOne({
-          _id: parseObjectId(req.params.interviewId, "interview ID"),
-          userId: req.user!.id,
-        });
-
-      if (!interview) {
-        res.status(404).json({ error: "Interview not found." });
-        return;
-      }
-
-      if (interview.status === "completed") {
-        res.status(409).json({
-          error:
-            "This interview has already ended. Start a new session to continue practicing.",
-        });
-        return;
-      }
-
-      const userMessage: StoredMessage = {
-        id: messageId(),
-        role: "user",
-        content,
-        createdAt: new Date(),
-      };
-
-      await db
-        .collection<InterviewSessionDocument>("interviewSessions")
-        .updateOne(
-          {
-            _id: interview._id,
-            userId: req.user!.id,
-          },
-          {
-            $push: { messages: userMessage },
-            $set: { updatedAt: new Date() },
-          },
-        );
-
-      const resumeFilter =
-        interview.resumeId && ObjectId.isValid(interview.resumeId)
-          ? {
-              _id: new ObjectId(interview.resumeId),
-              userId: req.user!.id,
-            }
-          : {
-              userId: req.user!.id,
-              isPrimary: true,
-            };
-
-      const resume = await db
-        .collection<ResumeDocument>("resumes")
-        .findOne(resumeFilter);
-
-      const systemPrompt = buildInterviewSystemPrompt({
-        role: interview.role,
-        company: interview.company,
-        jobDescription: interview.jobDescription,
-        resumeText: resume?.rawText,
-        interviewType: interview.interviewType,
-        difficulty: interview.difficulty,
-      });
-
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache, no-transform");
-      res.setHeader("Connection", "keep-alive");
-      res.flushHeaders();
-
-      let fullResponse = "";
-
-      await streamLlmResponse({
-        systemPrompt,
-        messages: [...interview.messages, userMessage].map((message) => ({
-          role: message.role,
-          content: message.content,
-        })),
-        onToken: (token) => {
-          fullResponse += token;
-          writeSse(res, "token", { token });
+    await interviewSessions.updateOne(
+      { _id: interviewId, userId },
+      {
+        $push: { messages: assistantMessage },
+        $set: {
+          updatedAt: new Date(),
+          ...(endedByUser ? { status: "completed" as const } : {}),
         },
-      });
+      },
+    );
 
-      const assistantMessage: StoredMessage = {
-        id: messageId(),
-        role: "assistant",
-        content: fullResponse.trim(),
-        createdAt: new Date(),
-      };
-
-      const endedByUser =
-        /\b(end|finish|stop)\s+(the\s+)?interview\b/i.test(content);
-
-      await db
-        .collection<InterviewSessionDocument>("interviewSessions")
-        .updateOne(
-          {
-            _id: interview._id,
-            userId: req.user!.id,
-          },
-          {
-            $push: { messages: assistantMessage },
-            $set: {
-              updatedAt: new Date(),
-              ...(endedByUser ? { status: "completed" as const } : {}),
-            },
-          },
-        );
-
-      writeSse(res, "done", {
-        messageId: assistantMessage.id,
-        completed: endedByUser,
-        createdAt: assistantMessage.createdAt.toISOString(),
-      });
-
-      res.end();
-    } catch (error) {
-      next(error);
-    }
-  },
-);
+    stream.send("done", {
+      messageId: assistantMessage.id,
+      completed: endedByUser,
+      createdAt: assistantMessage.createdAt.toISOString(),
+    });
+  }, "Interview response failed.");
+}));

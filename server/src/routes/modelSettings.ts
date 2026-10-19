@@ -1,58 +1,35 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { asyncHandler } from '../lib/http.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
   getModelConfig,
   toPublicModelConfig,
   updateModelConfig,
-} from '../modelConfig.js';
-
-const providerSchema = z.enum([
-  'vllm',
-  'ollama',
-  'openai',
-  'anthropic',
-]);
+} from '../services/modelConfig.js';
+import { MODEL_PROVIDERS } from '../types.js';
 
 const updateSchema = z.object({
-  provider: providerSchema,
-  baseUrl: z.string().trim().url().max(500),
+  provider: z.enum(MODEL_PROVIDERS),
+  baseUrl: z
+    .string()
+    .trim()
+    .url()
+    .max(500)
+    .refine((value) => /^https?:\/\//i.test(value), 'Base URL must use http or https.'),
   model: z.string().trim().min(1).max(300),
   apiKey: z.string().trim().max(1000).optional(),
 });
 
 export const modelSettingsRouter = Router();
 
-modelSettingsRouter.get(
-  '/',
-  requireAuth,
-  async (_req, res, next) => {
-    try {
-      const config = await getModelConfig();
+modelSettingsRouter.use(requireAuth);
 
-      res.json({
-        config: toPublicModelConfig(config),
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
+modelSettingsRouter.get('/', asyncHandler(async (_req, res) => {
+  res.json({ config: toPublicModelConfig(await getModelConfig()) });
+}));
 
-modelSettingsRouter.put(
-  '/',
-  requireAuth,
-  async (req, res, next) => {
-    try {
-      const input = updateSchema.parse(req.body);
-
-      const config = await updateModelConfig(input);
-
-      res.json({
-        config: toPublicModelConfig(config),
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
+modelSettingsRouter.put('/', asyncHandler(async (req, res) => {
+  const input = updateSchema.parse(req.body);
+  res.json({ config: toPublicModelConfig(await updateModelConfig(input)) });
+}));

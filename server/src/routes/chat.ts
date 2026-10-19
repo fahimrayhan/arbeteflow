@@ -1,63 +1,29 @@
-import { ObjectId } from 'mongodb';
-import { Router, type Response } from 'express';
+import { Router } from 'express';
 import { z } from 'zod';
-import { getDb } from '../db.js';
+import { collections } from '../db.js';
+import { asyncHandler, notFound, parseObjectId, userIdOf } from '../lib/http.js';
+import { createMessage, sendMessageSchema, serializeMessage } from '../lib/messages.js';
+import { runSseStream } from '../lib/sse.js';
 import { requireAuth } from '../middleware/auth.js';
 import { streamLlmResponse } from '../services/llm.js';
 import { buildCoachSystemPrompt } from '../services/prompts.js';
-import type {
-  ChatSessionDocument,
-  CoachMode,
-  JobDocument,
-  ResumeDocument,
-  StoredMessage,
-} from '../types.js';
+import { COACH_MODES, type ChatSessionDocument } from '../types.js';
 
-const modeSchema = z.enum([
-  'resume',
-  'career',
-  'jobcritic',
-]);
+/*
+  Keep recent conversation history only. This prevents a small-context
+  local model (e.g. a 2048-token Qwen setup) from receiving an unbounded conversation.
+*/
+const CONTEXT_MESSAGE_LIMIT = 10;
 
 const startSessionSchema = z.object({
-  mode: modeSchema,
+  mode: z.enum(COACH_MODES),
 });
-
-const sendMessageSchema = z.object({
-  content: z.string().trim().min(1).max(12_000),
-});
-
-function messageId(): string {
-  return crypto.randomUUID();
-}
-
-function parseSessionId(value: string): ObjectId {
-  if (!ObjectId.isValid(value)) {
-    throw new Error('Invalid chat session ID.');
-  }
-
-  return new ObjectId(value);
-}
-
-function writeSse(
-  res: Response,
-  event: string,
-  data: unknown,
-): void {
-  res.write(`event: ${event}\n`);
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
-}
 
 function serializeSession(session: ChatSessionDocument) {
   return {
     id: session._id?.toString(),
     mode: session.mode,
-    messages: session.messages.map((message) => ({
-      id: message.id,
-      role: message.role,
-      content: message.content,
-      createdAt: message.createdAt.toISOString(),
-    })),
+    messages: session.messages.map(serializeMessage),
     createdAt: session.createdAt.toISOString(),
     updatedAt: session.updatedAt.toISOString(),
   };
@@ -65,227 +31,112 @@ function serializeSession(session: ChatSessionDocument) {
 
 export const chatRouter = Router();
 
-chatRouter.post('/sessions', requireAuth, async (req, res, next) => {
-  try {
-    const { mode } = startSessionSchema.parse(req.body);
-    const now = new Date();
+chatRouter.use(requireAuth);
 
-    const session: ChatSessionDocument = {
-      userId: req.user!.id,
-      mode: mode as CoachMode,
-      messages: [],
-      createdAt: now,
-      updatedAt: now,
-    };
+chatRouter.post('/sessions', asyncHandler(async (req, res) => {
+  const { mode } = startSessionSchema.parse(req.body);
+  const now = new Date();
 
-    const db = await getDb();
+  const session: ChatSessionDocument = {
+    userId: userIdOf(req),
+    mode,
+    messages: [],
+    createdAt: now,
+    updatedAt: now,
+  };
 
-    const result = await db
-      .collection<ChatSessionDocument>('chatSessions')
-      .insertOne(session);
+  const { chatSessions } = await collections();
+  const result = await chatSessions.insertOne(session);
 
-    res.status(201).json({
-      session: serializeSession({
-        ...session,
-        _id: result.insertedId,
-      }),
-    });
-  } catch (error) {
-    next(error);
+  res.status(201).json({
+    session: serializeSession({ ...session, _id: result.insertedId }),
+  });
+}));
+
+chatRouter.get('/sessions', asyncHandler(async (req, res) => {
+  const { chatSessions } = await collections();
+
+  const sessions = await chatSessions
+    .find({ userId: userIdOf(req) })
+    .sort({ updatedAt: -1 })
+    .limit(50)
+    .toArray();
+
+  res.json({ sessions: sessions.map(serializeSession) });
+}));
+
+chatRouter.get('/sessions/:sessionId', asyncHandler(async (req, res) => {
+  const { chatSessions } = await collections();
+
+  const session = await chatSessions.findOne({
+    _id: parseObjectId(req.params.sessionId, 'chat session ID'),
+    userId: userIdOf(req),
+  });
+
+  if (!session) {
+    throw notFound('Chat session not found.');
   }
-});
 
-chatRouter.get('/sessions', requireAuth, async (req, res, next) => {
-  try {
-    const db = await getDb();
+  res.json({ session: serializeSession(session) });
+}));
 
-    const sessions = await db
-      .collection<ChatSessionDocument>('chatSessions')
-      .find({ userId: req.user!.id })
-      .sort({ updatedAt: -1 })
-      .limit(50)
-      .toArray();
+chatRouter.post('/sessions/:sessionId/messages', asyncHandler(async (req, res) => {
+  const { content } = sendMessageSchema.parse(req.body);
+  const userId = userIdOf(req);
+  const sessionId = parseObjectId(req.params.sessionId, 'chat session ID');
+  const { chatSessions, resumes, jobs } = await collections();
 
-    res.json({
-      sessions: sessions.map(serializeSession),
-    });
-  } catch (error) {
-    next(error);
+  const session = await chatSessions.findOne({ _id: sessionId, userId });
+
+  if (!session) {
+    throw notFound('Chat session not found.');
   }
-});
 
-chatRouter.get(
-  '/sessions/:sessionId',
-  requireAuth,
-  async (req, res, next) => {
-    try {
-      const db = await getDb();
+  const userMessage = createMessage('user', content);
 
-      const session = await db
-        .collection<ChatSessionDocument>('chatSessions')
-        .findOne({
-          _id: parseSessionId(req.params.sessionId),
-          userId: req.user!.id,
-        });
+  await chatSessions.updateOne(
+    { _id: sessionId, userId },
+    { $push: { messages: userMessage }, $set: { updatedAt: new Date() } },
+  );
 
-      if (!session) {
-        res.status(404).json({
-          error: 'Chat session not found.',
-        });
-        return;
-      }
+  const [resume, savedJobs] = await Promise.all([
+    resumes.findOne({ userId, isPrimary: true }),
+    jobs.find({ userId }).sort({ updatedAt: -1 }).limit(20).toArray(),
+  ]);
 
-      res.json({
-        session: serializeSession(session),
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
+  const systemPrompt = buildCoachSystemPrompt({
+    mode: session.mode,
+    resumeText: resume?.rawText,
+    jobs: savedJobs,
+  });
 
-chatRouter.post(
-  '/sessions/:sessionId/messages',
-  requireAuth,
-  async (req, res, next) => {
-    try {
-      const { content } = sendMessageSchema.parse(req.body);
-      const db = await getDb();
+  await runSseStream(req, res, async (stream) => {
+    let fullResponse = '';
 
-      const session = await db
-        .collection<ChatSessionDocument>('chatSessions')
-        .findOne({
-          _id: parseSessionId(req.params.sessionId),
-          userId: req.user!.id,
-        });
+    await streamLlmResponse({
+      systemPrompt,
+      messages: [...session.messages, userMessage].slice(-CONTEXT_MESSAGE_LIMIT),
+      maxTokens: 350,
+      signal: stream.signal,
+      onToken: (token) => {
+        fullResponse += token;
+        stream.send('token', { token });
+      },
+    });
 
-      if (!session) {
-        res.status(404).json({
-          error: 'Chat session not found.',
-        });
-        return;
-      }
+    const assistantMessage = createMessage(
+      'assistant',
+      fullResponse.trim() || 'I could not generate a response. Please try again.',
+    );
 
-      const userMessage: StoredMessage = {
-        id: messageId(),
-        role: 'user',
-        content,
-        createdAt: new Date(),
-      };
+    await chatSessions.updateOne(
+      { _id: sessionId, userId },
+      { $push: { messages: assistantMessage }, $set: { updatedAt: new Date() } },
+    );
 
-      await db
-        .collection<ChatSessionDocument>('chatSessions')
-        .updateOne(
-          {
-            _id: session._id,
-            userId: req.user!.id,
-          },
-          {
-            $push: {
-              messages: userMessage,
-            },
-            $set: {
-              updatedAt: new Date(),
-            },
-          },
-        );
-
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache, no-transform');
-      res.setHeader('Connection', 'keep-alive');
-      res.flushHeaders();
-
-      const [resume, jobs] = await Promise.all([
-        db
-          .collection<ResumeDocument>('resumes')
-          .findOne({
-            userId: req.user!.id,
-            isPrimary: true,
-          }),
-        db
-          .collection<JobDocument>('jobs')
-          .find({
-            userId: req.user!.id,
-          })
-          .sort({ updatedAt: -1 })
-          .limit(20)
-          .toArray(),
-      ]);
-
-      const systemPrompt = buildCoachSystemPrompt({
-        mode: session.mode,
-        resumeText: resume?.rawText?.slice(0, 8_000),
-        jobs,
-      });
-
-      /*
-        Keep recent conversation history only. This prevents your
-        2048-token Qwen setup from receiving an unbounded conversation.
-      */
-      const contextMessages = [
-        ...session.messages,
-        userMessage,
-      ].slice(-10);
-
-      let fullResponse = '';
-
-      await streamLlmResponse({
-        systemPrompt,
-        messages: contextMessages,
-        maxTokens: 350,
-        onToken: (token) => {
-          fullResponse += token;
-
-          writeSse(res, 'token', { token });
-        },
-      });
-
-      const assistantMessage: StoredMessage = {
-        id: messageId(),
-        role: 'assistant',
-        content:
-          fullResponse.trim() ||
-          'I could not generate a response. Please try again.',
-        createdAt: new Date(),
-      };
-
-      await db
-        .collection<ChatSessionDocument>('chatSessions')
-        .updateOne(
-          {
-            _id: session._id,
-            userId: req.user!.id,
-          },
-          {
-            $push: {
-              messages: assistantMessage,
-            },
-            $set: {
-              updatedAt: new Date(),
-            },
-          },
-        );
-
-      writeSse(res, 'done', {
-        messageId: assistantMessage.id,
-        createdAt: assistantMessage.createdAt.toISOString(),
-      });
-
-      res.end();
-    } catch (error) {
-      if (res.headersSent) {
-        writeSse(res, 'error', {
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Chat request failed.',
-        });
-
-        res.end();
-        return;
-      }
-
-      next(error);
-    }
-  },
-);
+    stream.send('done', {
+      messageId: assistantMessage.id,
+      createdAt: assistantMessage.createdAt.toISOString(),
+    });
+  }, 'Chat request failed.');
+}));

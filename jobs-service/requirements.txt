@@ -1,0 +1,13 @@
+fastapi>=0.115.0,<1.0
+uvicorn[standard]>=0.30.0,<1.0
+# Embedded vector store. Embeddings are supplied by embeddings.py, so Chroma's own model is never used.
+chromadb>=1.0.0,<2.0
+# Sentence embeddings without PyTorch: ONNX Runtime + SentencePiece (see embeddings.py).
+onnxruntime>=1.17,<2.0
+sentencepiece>=0.2.0,<1.0
+numpy>=1.24,<3.0
+# Only used by download_model.py at image build time.
+huggingface_hub>=0.23,<2.0
+requests>=2.32.0,<3.0
+python-dotenv>=1.0.1,<2.0
+pydantic>=2.8.0,<3.0

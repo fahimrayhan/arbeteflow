@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { getDb } from "../db.js";
+import { collections } from "../db.js";
+import { asyncHandler, HttpError, userIdOf } from "../lib/http.js";
 import { requireAuth } from "../middleware/auth.js";
 import type { ResumeDocument } from "../types.js";
 
@@ -24,62 +25,43 @@ function serializeResume(resume: ResumeDocument) {
 
 export const resumeRouter = Router();
 
-resumeRouter.get("/primary", requireAuth, async (req, res, next) => {
-  try {
-    const db = await getDb();
+resumeRouter.get("/primary", requireAuth, asyncHandler(async (req, res) => {
+  const { resumes } = await collections();
+  const resume = await resumes.findOne({ userId: userIdOf(req), isPrimary: true });
 
-    const resume = await db
-      .collection<ResumeDocument>("resumes")
-      .findOne({ userId: req.user!.id, isPrimary: true });
+  res.json({ resume: resume ? serializeResume(resume) : null });
+}));
 
-    res.json({
-      resume: resume ? serializeResume(resume) : null,
-    });
-  } catch (error) {
-    next(error);
+resumeRouter.put("/primary", requireAuth, asyncHandler(async (req, res) => {
+  const input = resumeInputSchema.parse(req.body);
+  const userId = userIdOf(req);
+  const now = new Date();
+  const { resumes } = await collections();
+
+  const result = await resumes.findOneAndUpdate(
+    { userId, isPrimary: true },
+    {
+      $set: {
+        title: input.title ?? "Primary resume",
+        rawText: input.rawText,
+        enhancedText: input.enhancedText,
+        updatedAt: now,
+      },
+      $setOnInsert: { userId, isPrimary: true, createdAt: now },
+    },
+    { upsert: true, returnDocument: "after" },
+  );
+
+  if (!result) {
+    throw new HttpError(500, "Could not save the resume.");
   }
-});
 
-resumeRouter.put("/primary", requireAuth, async (req, res, next) => {
-  try {
-    const input = resumeInputSchema.parse(req.body);
-    const db = await getDb();
-    const now = new Date();
+  res.json({ resume: serializeResume(result) });
+}));
 
-    const result = await db
-      .collection<ResumeDocument>("resumes")
-      .findOneAndUpdate(
-        {
-          userId: req.user!.id,
-          isPrimary: true,
-        },
-        {
-          $set: {
-            title: input.title ?? "Primary resume",
-            rawText: input.rawText,
-            enhancedText: input.enhancedText,
-            updatedAt: now,
-          },
-          $setOnInsert: {
-            userId: req.user!.id,
-            isPrimary: true,
-            createdAt: now,
-          },
-        },
-        {
-          upsert: true,
-          returnDocument: "after",
-        },
-      );
+resumeRouter.delete("/primary", requireAuth, asyncHandler(async (req, res) => {
+  const { resumes } = await collections();
+  await resumes.deleteOne({ userId: userIdOf(req), isPrimary: true });
 
-    if (!result) {
-      throw new Error("Could not save the resume.");
-    }
-
-    res.json({
-      resume: serializeResume(result),
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+  res.status(204).send();
+}));
