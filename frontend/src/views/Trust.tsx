@@ -3,7 +3,7 @@ import { ChevronDown, Database, LockKeyhole, ShieldCheck, Sparkles } from 'lucid
 import { PageHeader } from '../components/ui/PageHeader';
 import { cardStyle, fieldStyle, foregroundText, mutedText, primaryText, secondaryButtonStyle } from '../components/ui/styles';
 
-type Section = 'overview' | 'privacy' | 'responsible' | 'fairness' | 'setup' | 'disclaimer' | 'faq';
+type Section = 'overview' | 'privacy' | 'fairness' | 'setup' | 'disclaimer' | 'faq';
 
 const FAQS = [
   ['Is my data sent anywhere?', 'The app sends text to the model provider you select when you request AI help. With a local model, it can stay on your computer. Cloud providers receive the text needed for the request and apply their own terms and retention policies.'],
@@ -26,7 +26,6 @@ function TrustNav({ active, onSelect }: { active: Section; onSelect: (section: S
   const items: Array<[Section, string]> = [
     ['overview', 'How it works'],
     ['privacy', 'Privacy & data flow'],
-    ['responsible', 'Responsible AI'],
     ['fairness', 'Fairness & bias'],
     ['setup', 'Model setup'],
     ['disclaimer', 'Disclaimer'],
@@ -95,15 +94,6 @@ function Privacy() {
   );
 }
 
-function Responsible() {
-  return <div className="space-y-4 text-sm leading-6" style={mutedText}>
-    <h2 className="text-lg font-semibold" style={foregroundText}>What we try to prevent</h2>
-    <ul className="list-disc pl-5 space-y-2"><li>Prompt injection and attempts to reveal hidden instructions.</li><li>Fabricating qualifications, employers, metrics, or certifications.</li><li>Screening or ranking people by protected characteristics.</li><li>Harmful or unrelated requests in the career coach and interview flows.</li></ul>
-    <h2 className="text-lg font-semibold" style={foregroundText}>What we cannot guarantee</h2>
-    <p>Guardrails are deterministic mitigation plus model instructions, not a safety proof. Small models can misunderstand context, produce biased wording, or hallucinate. Verify every output and do not use this tool as an automated hiring decision-maker.</p>
-  </div>;
-}
-
 function Fairness() {
   return <div className="space-y-4 text-sm leading-6" style={mutedText}>
     <h2 className="text-lg font-semibold" style={foregroundText}>Fairness approach</h2>
@@ -144,6 +134,6 @@ export function FaqView() {
 }
 
 function TrustLayout({ section, onSelect }: { section: Section; onSelect: (section: Section) => void }) {
-  const content = { overview: <HowItWorks />, privacy: <Privacy />, responsible: <Responsible />, fairness: <Fairness />, setup: <Setup />, disclaimer: <Disclaimer />, faq: <Faq /> }[section];
-  return <div className="max-w-5xl"><PageHeader className="mb-6" eyebrow="TRUST & TRANSPARENCY" title={section === 'faq' ? 'Frequently Asked Questions' : 'Responsible use of ArbeteFlow'} description="Understand how the app works, what it stores, what it sends, and where AI can fail." /><TrustNav active={section} onSelect={onSelect} /><section role="tabpanel" className="rounded-2xl p-5" style={cardStyle}>{content}</section></div>;
+  const content = { overview: <HowItWorks />, privacy: <Privacy />, fairness: <Fairness />, setup: <Setup />, disclaimer: <Disclaimer />, faq: <Faq /> }[section];
+  return <div className="max-w-5xl"><PageHeader className="mb-6" eyebrow="TRUST & TRANSPARENCY" title={section === 'faq' ? 'Frequently Asked Questions' : 'Privacy & help'} description="Understand how the app works, what it stores, what it sends, and where AI can fail." /><TrustNav active={section} onSelect={onSelect} /><section role="tabpanel" className="rounded-2xl p-5" style={cardStyle}>{content}</section></div>;
 }

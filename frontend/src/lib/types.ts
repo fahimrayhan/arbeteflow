@@ -1,4 +1,5 @@
 export type View =
+  | 'home'
   | 'resume'
   | 'coverletter'
   | 'chat'
@@ -6,7 +7,7 @@ export type View =
   | 'finder'
   | 'tracker'
   | 'settings'
-  | 'learn'
+  | 'trust'
   | 'faq';
 
 export type ChatMode = 'resume' | 'career' | 'jobcritic';

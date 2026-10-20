@@ -8,6 +8,7 @@ import {
   Settings,
   BookOpen,
   CircleHelp,
+  House,
   type LucideIcon,
 } from 'lucide-react';
 import type { View } from '../lib/types';
@@ -20,6 +21,12 @@ export type NavigationItem = {
 };
 
 export const NAV_ITEMS: NavigationItem[] = [
+  {
+    id: 'home',
+    label: 'Home',
+    icon: House,
+    description: 'Your career workspace',
+  },
   {
     id: 'resume',
     label: 'Resume',
@@ -63,10 +70,10 @@ export const NAV_ITEMS: NavigationItem[] = [
     description: 'Local app preferences',
   },
   {
-    id: 'learn',
-    label: 'Responsible AI',
+    id: 'trust',
+    label: 'Privacy & Help',
     icon: BookOpen,
-    description: 'How it works, privacy, and fairness',
+    description: 'Privacy, fairness, and how it works',
   },
   {
     id: 'faq',

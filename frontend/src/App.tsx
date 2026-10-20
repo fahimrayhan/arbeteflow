@@ -6,6 +6,7 @@ import { MobileHeader } from './components/layout/MobileHeader';
 import { Sidebar } from './components/layout/Sidebar';
 import type { JobDraft, View } from './lib/types';
 
+import Home from './views/Home';
 import Chat from './views/Chat';
 import CoverLetter from './views/CoverLetter';
 import Interview from './views/Interview';
@@ -16,6 +17,7 @@ import Tracker from './views/Tracker';
 import TrustView, { FaqView } from './views/Trust';
 
 const VIEWS: Record<View, ComponentType> = {
+  home: Home,
   resume: Resume,
   coverletter: CoverLetter,
   chat: Chat,
@@ -23,12 +25,12 @@ const VIEWS: Record<View, ComponentType> = {
   finder: JobFinder,
   tracker: Tracker,
   settings: SettingsView,
-  learn: TrustView,
+  trust: TrustView,
   faq: FaqView,
 };
 
 export default function App() {
-  const [view, setView] = useState<View>('resume');
+  const [view, setView] = useState<View>('home');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [jobDraft, setJobDraft] = useState<JobDraft | null>(null);
   const { theme, toggleTheme } = useTheme();
