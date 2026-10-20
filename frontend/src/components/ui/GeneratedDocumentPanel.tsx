@@ -118,15 +118,22 @@ export function GeneratedDocumentPanel({
 
         {text ? (
           onTextChange ? (
-            <textarea
-              value={text}
-              ref={editableRef}
-              onChange={(event) => onTextChange(event.target.value)}
-              readOnly={streaming}
-              aria-label={`${title} editable text`}
-              className="w-full min-h-[420px] resize-none bg-transparent outline-none font-sans"
-              style={foregroundText}
-            />
+            <>
+              <textarea
+                value={text}
+                ref={editableRef}
+                onChange={(event) => onTextChange(event.target.value)}
+                readOnly={streaming}
+                aria-label={`${title} editable text`}
+                className="w-full min-h-[420px] resize-none bg-transparent outline-none font-sans"
+                style={foregroundText}
+              />
+              {!streaming && (
+                <p className="text-xs mt-2" style={mutedText}>
+                  Click in the text to make corrections. Use Save in the left panel to keep your edits.
+                </p>
+              )}
+            </>
           ) : (
             <pre className="m-0 whitespace-pre-wrap font-sans" style={foregroundText}>
               {text}
