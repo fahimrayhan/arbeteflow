@@ -19,6 +19,8 @@ interface GeneratedDocumentPanelProps {
   onExportPdf: () => void;
   /** Allows the caller to edit generated text before saving or exporting. */
   onTextChange?: (text: string) => void;
+  /** Explains where inline edits are used by the caller. */
+  editHint?: string;
   /** Optional content under the output box (e.g. research sources). */
   footer?: ReactNode;
 }
@@ -37,6 +39,7 @@ export function GeneratedDocumentPanel({
   onDownloadTxt,
   onExportPdf,
   onTextChange,
+  editHint = 'Edits are included when you copy, download, or export this document.',
   footer,
 }: GeneratedDocumentPanelProps) {
   const outputRef = useRef<HTMLDivElement>(null);
@@ -130,7 +133,7 @@ export function GeneratedDocumentPanel({
               />
               {!streaming && (
                 <p className="text-xs mt-2" style={mutedText}>
-                  Click in the text to make corrections. Use Save in the left panel to keep your edits.
+                  Click in the text to make corrections. {editHint}
                 </p>
               )}
             </>

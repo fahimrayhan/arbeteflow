@@ -119,7 +119,7 @@ chatRouter.post('/sessions/:sessionId/messages', asyncHandler(async (req, res) =
     await streamLlmResponse({
       systemPrompt,
       messages: [...session.messages, userMessage].slice(-CONTEXT_MESSAGE_LIMIT),
-      maxTokens: 350,
+      maxTokens: 600,
       signal: stream.signal,
       onToken: (token) => {
         fullResponse += token;
@@ -128,7 +128,7 @@ chatRouter.post('/sessions/:sessionId/messages', asyncHandler(async (req, res) =
       onComplete: (text) => stream.send('guard', { ...guarded.report, outputFlags: lintGeneratedText(text, userMessage.content) }),
       outputGuard: {
         validate: validateCareerOutput,
-        fallback: 'I’m ArbetsFlow. I can help with resumes, job applications, career planning, and interview preparation.',
+        fallback: 'I’m ArbeteFlow. I can help with resumes, job applications, career planning, and interview preparation.',
       },
     });
 

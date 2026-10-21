@@ -87,7 +87,7 @@ export default function App() {
 
         <main className="min-w-0 flex-1">
           <MobileHeader
-            title={activeNavigationItem?.label ?? 'ArbetsFlow'}
+            title={activeNavigationItem?.label ?? 'ArbeteFlow'}
             theme={theme}
             onOpenMenu={() => setSidebarOpen(true)}
             onToggleTheme={toggleTheme}

@@ -344,6 +344,11 @@ export default function CoverLetter() {
           onCopy={() => void handleCopy()}
           onDownloadTxt={() => downloadTextFile(coverLetter, `${exportBaseName}.txt`)}
           onExportPdf={() => void handleExportPdf()}
+          onTextChange={(text) => {
+            setCoverLetter(text);
+            setNotice('Edited cover letter. Your changes will be used for copy, download, and PDF export.');
+          }}
+          editHint="Your edits are included when you copy, download, or export the letter."
           footer={
             research?.status === 'used' && research.sources.length > 0 && !generating ? (
               <div className="mt-3">

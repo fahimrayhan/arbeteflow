@@ -21,49 +21,49 @@ const WORKFLOWS: Array<{
   description: string;
   action: string;
 }> = [
-  {
-    id: 'resume',
-    icon: FileText,
-    title: 'Build your resume',
-    description: 'Import your CV, improve its wording, and tailor it to a target role.',
-    action: 'Open Resume',
-  },
-  {
-    id: 'finder',
-    icon: Search,
-    title: 'Find relevant jobs',
-    description: 'Search Swedish listings and discover roles that fit your experience.',
-    action: 'Explore jobs',
-  },
-  {
-    id: 'coverletter',
-    icon: Mail,
-    title: 'Prepare applications',
-    description: 'Draft a cover letter around the role, company, and your background.',
-    action: 'Write a letter',
-  },
-  {
-    id: 'tracker',
-    icon: Kanban,
-    title: 'Track your progress',
-    description: 'Keep saved roles and applications organized through each stage.',
-    action: 'Open tracker',
-  },
-  {
-    id: 'interview',
-    icon: BriefcaseBusiness,
-    title: 'Practice interviews',
-    description: 'Rehearse role-specific questions and prepare stronger answers.',
-    action: 'Start practice',
-  },
-  {
-    id: 'chat',
-    icon: MessageSquare,
-    title: 'Get career guidance',
-    description: 'Ask the AI coach for resume feedback, job-search ideas, and advice.',
-    action: 'Talk to the coach',
-  },
-];
+    {
+      id: 'resume',
+      icon: FileText,
+      title: 'Build your resume',
+      description: 'Import your CV, improve its wording, and tailor it to a target role.',
+      action: 'Open Resume',
+    },
+    {
+      id: 'finder',
+      icon: Search,
+      title: 'Find relevant jobs',
+      description: 'Search Swedish listings and discover roles that fit your experience.',
+      action: 'Explore jobs',
+    },
+    {
+      id: 'coverletter',
+      icon: Mail,
+      title: 'Prepare applications',
+      description: 'Draft a cover letter around the role, company, and your background.',
+      action: 'Write a letter',
+    },
+    {
+      id: 'tracker',
+      icon: Kanban,
+      title: 'Track your progress',
+      description: 'Keep saved roles and applications organized through each stage.',
+      action: 'Open tracker',
+    },
+    {
+      id: 'interview',
+      icon: BriefcaseBusiness,
+      title: 'Practice interviews',
+      description: 'Rehearse role-specific questions and prepare stronger answers.',
+      action: 'Start practice',
+    },
+    {
+      id: 'chat',
+      icon: MessageSquare,
+      title: 'Get career guidance',
+      description: 'Ask the AI coach for resume feedback, job-search ideas, and advice.',
+      action: 'Talk to the coach',
+    },
+  ];
 
 export default function Home() {
   const { navigate } = useApp();
@@ -85,7 +85,7 @@ export default function Home() {
             Make your next move <span style={{ color: 'var(--color-primary)' }}>with confidence.</span>
           </h1>
           <p className="mt-5 text-base sm:text-lg leading-7 max-w-2xl" style={mutedText}>
-            ArbetsFlow brings your job search together: shape your resume, find opportunities, prepare each application, and keep track of what comes next.
+            ArbeteFlow brings your job search together: shape your resume, find opportunities, prepare each application, and keep track of what comes next.
           </p>
           <div className="flex flex-wrap gap-3 mt-8">
             <button
@@ -151,7 +151,7 @@ export default function Home() {
             <p className="text-xs font-semibold tracking-widest mb-2" style={{ color: 'var(--color-primary)' }}>RESPONSIBLE AI</p>
             <h2 id="responsible-ai-heading" className="text-2xl font-bold" style={foregroundText}>AI support with people in control</h2>
             <p className="text-sm leading-6 mt-2 max-w-3xl" style={mutedText}>
-              ArbetsFlow includes checks intended to discourage prompt injection, invented qualifications, and discriminatory requests. Job matching removes some common personal identifiers, but these protections are imperfect. AI output can still be inaccurate or biased, so review every draft and make your own decisions.
+              ArbeteFlow includes checks intended to discourage prompt injection, invented qualifications, and discriminatory requests. Job matching removes some common personal identifiers, but these protections are imperfect. AI output can still be inaccurate or biased, so review every draft and make your own decisions.
             </p>
             <div className="grid sm:grid-cols-2 gap-3 mt-5">
               <div className="flex gap-2.5 text-sm leading-6" style={mutedText}>

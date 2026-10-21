@@ -37,7 +37,7 @@ export function Sidebar({ view, open, theme, onNavigate, onToggleTheme }: Sideba
 
           <div>
             <div className="font-bold tracking-tight" style={foregroundText}>
-              ArbetsFlow
+              ArbeteFlow
             </div>
 
             <div className="text-xs" style={mutedText}>

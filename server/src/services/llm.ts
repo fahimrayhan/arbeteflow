@@ -183,7 +183,7 @@ export async function streamLlmResponse(input: {
     systemPrompt: input.systemPrompt,
     // Only role/content are sent; stored messages carry extra fields.
     messages: input.messages.map(({ role, content }) => ({ role, content })),
-    maxTokens: input.maxTokens ?? 450,
+    maxTokens: input.maxTokens ?? 500,
   });
 
   const timeoutSignal = AbortSignal.timeout(config.modelTimeoutMs);
@@ -257,8 +257,13 @@ export async function streamLlmResponse(input: {
 
     buffer += decoder.decode();
     await emit(extractPayloads(buffer, request.framing, true).payloads);
-    const outputProblem = input.outputGuard?.validate(fullResponse);
-    await input.onToken(outputProblem ? input.outputGuard!.fallback : fullResponse);
+    // const outputProblem = input.outputGuard?.validate(fullResponse);
+    // await input.onToken(outputProblem ? input.outputGuard!.fallback : fullResponse);
+    // await input.onComplete?.(fullResponse);
+    if (input.outputGuard) {
+      const outputProblem = input.outputGuard.validate(fullResponse);
+      await input.onToken(outputProblem ? input.outputGuard.fallback : fullResponse);
+    }
     await input.onComplete?.(fullResponse);
   } catch (error) {
     // Close the upstream connection so the model stops generating.
