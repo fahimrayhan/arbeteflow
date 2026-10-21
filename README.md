@@ -1,6 +1,6 @@
-# ArbetaFlow
+# ArbeteFlow
 
-ArbetaFlow is a career workspace for managing resumes and applications, practicing interviews, generating cover letters, and finding Swedish job listings. The React app uses an Express API, MongoDB for user data and model settings, and a Python vector service for job search.
+ArbeteFlow is a career workspace for managing resumes and applications, practicing interviews, generating cover letters, and finding Swedish job listings. The React app uses an Express API, MongoDB for user data and model settings, and a Python vector service for job search.
 
 ## Features
 

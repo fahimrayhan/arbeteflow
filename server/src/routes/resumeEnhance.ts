@@ -27,7 +27,7 @@ resumeEnhanceRouter.post('/', requireAuth, asyncHandler(async (req, res) => {
     await streamLlmResponse({
       systemPrompt: RESUME_ENHANCE_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: buildResumeEnhanceUserPrompt(guarded.values as typeof input) }],
-      maxTokens: 1500,
+      maxTokens: 3000,
       signal: stream.signal,
       onToken: (token) => stream.send('token', { token }),
       onComplete: (text) => stream.send('guard', { ...guarded.report, outputFlags: lintGeneratedText(text, input.resumeText) }),
