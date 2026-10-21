@@ -12,6 +12,7 @@ node_modules/
 **/.env.local
 **/.env.*.local
 
+
 # Build output
 dist/
 build/
@@ -87,3 +88,4 @@ Fix.md
 SECURITY.md
 Report.md
 docs/*
+summary/*

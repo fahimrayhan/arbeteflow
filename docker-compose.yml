@@ -56,6 +56,9 @@ services:
       dockerfile: Dockerfile
     container_name: arbeteflow-api
     restart: unless-stopped
+    # Load local API secrets such as TAVILY_API_KEY. This file is ignored by git.
+    env_file:
+      - ./server/.env
     ports:
       - "127.0.0.1:8787:8787"
     environment:
@@ -70,8 +73,6 @@ services:
       ALLOW_DEVELOPMENT_AUTH: "true"
       # Optional. When empty, a random key is generated into the api_data volume.
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-}
-      # Optional. Enables "Research the company on the web" in the cover letter generator.
-      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
     volumes:
       - api_data:/app/.data
     extra_hosts:
