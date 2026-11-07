@@ -6,9 +6,77 @@ ArbeteFlow is a career workspace for managing resumes and applications, practici
 
 - Resume editing, PDF text extraction, AI enhancement, and export to a real A4 PDF file (or .txt).
 - AI cover letters (optionally informed by a web search about the company), career coaching, and interview practice.
-- MongoDB-backed application tracker; saved applications are also used as AI coach context.
+- MongoDB-backed application tracker; saved applications and the primary resume are retrieved as AI coach context.
 - Semantic job search and resume matching against Arbetsförmedlingen listings, with location and "posted within" filters.
+- Retrieval-grounded generation: the configured model receives the user's saved resume, saved applications, job details, and (when enabled) trusted web-search references as bounded, untrusted context.
 - Provider settings for vLLM, Ollama (local or Ollama cloud), OpenAI, and Anthropic. Provider API keys are encrypted at rest.
+
+## See it in action
+
+ArbeteFlow brings the main parts of a job search into one workspace:
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="./screenshots/resume.png" alt="Resume enhancer" width="100%">
+      <br><strong>Resume enhancement</strong><br>
+      Tailor a resume to a target role, then copy, download, or export the result as a PDF.
+    </td>
+    <td align="center" width="50%">
+      <img src="./screenshots/job_portal.png" alt="Job Finder and semantic matcher" width="100%">
+      <br><strong>Semantic job matching</strong><br>
+      Search Swedish listings by role, skills, location, or a saved resume.
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="./screenshots/job_tracker.png" alt="Job application tracker" width="100%">
+      <br><strong>Application tracker</strong><br>
+      Organise opportunities across bookmarked, applied, interview, offer, and rejected stages.
+    </td>
+    <td align="center">
+      <img src="./screenshots/cover_letter.png" alt="Cover letter generator" width="100%">
+      <br><strong>Cover letter generation</strong><br>
+      Create a tailored letter from the job details and your saved resume.
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="./screenshots/interviewPractice.png" alt="Live interview practice" width="100%">
+      <br><strong>Interview practice</strong><br>
+      Run a role-specific mock interview with behavioural, technical, or case-study questions.
+    </td>
+    <td align="center">
+      <img src="./screenshots/ai_coach.png" alt="AI career coach" width="100%">
+      <br><strong>AI career coach</strong><br>
+      Get resume feedback, career guidance, and job-post analysis in one conversation.
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="./screenshots/ai_model.png" alt="AI model provider settings" width="100%">
+      <br><strong>Flexible model providers</strong><br>
+      Connect local vLLM or Ollama models, Ollama Cloud, OpenAI, or Anthropic.
+    </td>
+    <td align="center">
+      <img src="./screenshots/web_search.png" alt="Company research option for cover letters" width="100%">
+      <br><strong>Company research</strong><br>
+      Enrich cover letters with web search and review the references returned to the generator.
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="./screenshots/coverLetter.png" alt="Generated cover letter with research sources" width="100%">
+      <br><strong>Reviewable AI output</strong><br>
+      Edit generated content, export it, and inspect company research sources before using it.
+    </td>
+    <td align="center">
+      <img src="./screenshots/faq.png" alt="Trust and transparency FAQ" width="100%">
+      <br><strong>Trust and transparency</strong><br>
+      Explore data flow, privacy, fairness, model limitations, and responsible-use guidance.
+    </td>
+  </tr>
+</table>
 
 ## Run with Docker Compose
 
@@ -53,13 +121,20 @@ Optional Compose variables:
 
 ## Company research for cover letters
 
-With `TAVILY_API_KEY` set, the Cover Letter page shows **Research the company on the web**. When it is ticked, the API searches Tavily for the company (what it does, mission, culture, recent news), adds the top snippets to the prompt as untrusted reference data, and lists the sources under the generated letter so you can check any company detail the model used.
+With `TAVILY_API_KEY` set, the Cover Letter page shows **Research the company on the web**. When it is ticked, the API searches Tavily for the company (what it does, mission, culture, and recent news), adds a bounded set of result snippets to the LLM prompt as untrusted reference data, and lists the source titles and URLs under the generated letter so you can check any company detail the model used. The model is instructed to use only one or two relevant details and to ignore search text that looks like an instruction.
 
 - Only the company name is sent to Tavily; your resume is not.
 - Only search snippets are used: the server never downloads web pages itself.
+- References are returned with the generated letter so users can verify the supporting sources.
 - If the search fails or the quota is used up, the letter is still written and the page says research was skipped.
 
 To enable it, put `TAVILY_API_KEY=tvly-...` in a `.env` file next to `docker-compose.yml` (or in `server/.env` when running the API outside Docker) and restart the API.
+
+## Resume context and vector search
+
+The primary resume and saved applications are stored in MongoDB and retrieved by the API when building prompts for the AI coach, interview practice, cover letters, and resume-based job recommendations. This provides retrieval-grounded context, but the current implementation does **not** store user-resume embeddings in MongoDB or use MongoDB Atlas Vector Search.
+
+Resume-to-job matching uses the separate `jobs-service/` instead. The API anonymizes the resume, sends it to the service as a query, and the service embeds overlapping resume chunks and searches the Chroma index of Arbetsförmedlingen listings. The resume itself is not added to that persistent job index.
 
 ## Job search service (vector database)
 
