@@ -11,6 +11,10 @@ ArbeteFlow is a career workspace for managing resumes and applications, practici
 - Retrieval-grounded generation: the configured model receives the user's saved resume, saved applications, job details, and (when enabled) trusted web-search references as bounded, untrusted context.
 - Provider settings for vLLM, Ollama (local or Ollama cloud), OpenAI, and Anthropic. Provider API keys are encrypted at rest.
 
+## How It Works
+
+<img src="./screenshots/architech.png" alt="Request Flow Architecture" width="80%">
+
 ## See it in action
 
 ArbeteFlow brings the main parts of a job search into one workspace:
